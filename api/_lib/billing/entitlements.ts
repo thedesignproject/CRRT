@@ -4,7 +4,7 @@ import type { CloudPlan, PlanResource } from './plans.js'
 export type EntitlementSummary = {
   mode: 'community' | 'cloud'
   isLegacy?: boolean
-  appsumo?: boolean
+  includedPro?: 'early_access' | 'appsumo' | null
   plan: CloudPlan | null
   status: string
   canWrite: boolean

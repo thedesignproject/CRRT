@@ -121,7 +121,7 @@ it('uses Stripe Portal for plan changes on the current legacy contract', async (
 
 it('keeps legacy Pro included and starts a Studio checkout', async () => {
   vi.mocked(getBillingSummary).mockResolvedValue(summary({
-    isLegacy: true, plan: 'pro', lifecycle: 'active', canManageSubscription: false,
+    includedPro: 'early_access', plan: 'pro', lifecycle: 'active', canManageSubscription: false,
     actions: { checkoutState: false, changePlan: false },
   }))
   vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://checkout.stripe.com/c/studio' })
@@ -140,7 +140,7 @@ it.each([
   { periodEnd: '2026-11-01T00:00:00Z' },
 ])('explains that legacy Pro continues after Studio cancellation %#', async (period) => {
   vi.mocked(getBillingSummary).mockResolvedValue(summary({
-    isLegacy: true, plan: 'studio', lifecycle: 'active', canManageSubscription: true,
+    includedPro: 'early_access', plan: 'studio', lifecycle: 'active', canManageSubscription: true,
     cancelAtPeriodEnd: true, ...period,
   }))
   render(<BillingSettings {...props} />)
@@ -150,7 +150,7 @@ it.each([
 
 it('shows the normal renewal state while legacy Studio remains active', async () => {
   vi.mocked(getBillingSummary).mockResolvedValue(summary({
-    isLegacy: true, plan: 'studio', lifecycle: 'active', canManageSubscription: true,
+    includedPro: 'early_access', plan: 'studio', lifecycle: 'active', canManageSubscription: true,
     currentPeriodEnd: '2026-11-01T00:00:00Z',
   }))
   render(<BillingSettings {...props} />)

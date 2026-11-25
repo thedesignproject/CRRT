@@ -28,16 +28,16 @@ integration('AppSumo redemption on Postgres', () => {
     const owner = await user(), value = await code()
     expect(await redeem(owner, value)).toBe('redeemed')
     const [entitlements] = await sql!`select cloud_entitlements(${owner}) as value`
-    expect(entitlements.value).toMatchObject({ appsumo: true, isLegacy: true, plan: 'pro', status: 'legacy', canWrite: true,
+    expect(entitlements.value).toMatchObject({ includedPro: 'appsumo', isLegacy: false, plan: 'pro', status: 'legacy', canWrite: true,
       limits: { projects: 10, internal_users: 10, comments: 2000, product_audits: 5 } })
   })
   it('keeps an existing Stripe subscription in effect after redemption', async () => {
     const owner = await user(), value = await code()
     await sql!`insert into billing_accounts(user_id,plan,price_id,subscription_status,customer_id,period_start,period_end)
-      values (${owner},'studio','price_studio','active','cus_x',now()-interval '1 day',now()+interval '29 days')`
+      values (${owner},'studio','price_studio','active',${'cus_' + owner},now()-interval '1 day',now()+interval '29 days')`
     expect(await redeem(owner, value)).toBe('redeemed')
     const [row] = await sql!`select * from billing_accounts where user_id=${owner}`
-    expect(row).toMatchObject({ is_legacy: true, plan: 'studio', subscription_status: 'active', customer_id: 'cus_x' })
+    expect(row).toMatchObject({ included_pro: 'appsumo', is_legacy: false, plan: 'studio', subscription_status: 'active', customer_id: 'cus_' + owner })
   })
   it('rejects invalid, case-changed, used and second codes', async () => {
     const first = await user(), second = await user(), value = await code(), other = await code()
@@ -65,10 +65,39 @@ integration('AppSumo redemption on Postgres', () => {
     expect(await redeem(owner, value)).toBe('rate_limited')
     expect(await redeem(other, value)).toBe('redeemed')
   })
+  it('locks Pro in for an early user and returns them to early access after a refund', async () => {
+    const owner = await user(), value = await code(), next = await code()
+    await sql!`insert into billing_accounts(user_id,is_legacy,included_pro) values (${owner},true,'early_access')`
+    expect(await redeem(owner, value)).toBe('redeemed')
+    expect((await sql!`select is_legacy,included_pro from billing_accounts where user_id=${owner}`)[0]).toEqual({ is_legacy: true, included_pro: 'appsumo' })
+    expect((await sql!`select revoke_appsumo_code(${value}) as revoked`)[0].revoked).toBe(true)
+    expect((await sql!`select is_legacy,included_pro from billing_accounts where user_id=${owner}`)[0]).toEqual({ is_legacy: true, included_pro: 'early_access' })
+    // The refunded code stays used; the buyer may redeem a different one.
+    expect(await redeem(await user(), value)).toBe('already_redeemed')
+    expect(await redeem(owner, next)).toBe('redeemed')
+  })
+  it('removes included Pro from a refunded buyer who was not an early user', async () => {
+    const owner = await user(), value = await code()
+    expect(await redeem(owner, value)).toBe('redeemed')
+    expect((await sql!`select revoke_appsumo_code(${value}) as revoked`)[0].revoked).toBe(true)
+    expect((await sql!`select revoke_appsumo_code(${value}) as revoked`)[0].revoked).toBe(false)
+    expect((await sql!`select included_pro from billing_accounts where user_id=${owner}`)[0].included_pro).toBeNull()
+    const [entitlements] = await sql!`select cloud_entitlements(${owner}) as value`
+    expect(entitlements.value).toMatchObject({ includedPro: null, canWrite: false })
+  })
+  it('never lets an early user lose included Pro, and accepts only known reasons', async () => {
+    const owner = await user()
+    await sql!`insert into billing_accounts(user_id,is_legacy,included_pro) values (${owner},true,'early_access')`
+    await expect(sql!`update billing_accounts set included_pro=null where user_id=${owner}`).rejects.toThrow('billing_accounts_legacy_included_pro')
+    await expect(sql!`update billing_accounts set included_pro='gift' where user_id=${owner}`).rejects.toThrow('billing_accounts_included_pro')
+    await expect(sql!`insert into billing_accounts(user_id,is_legacy) values (${await user()},true)`).rejects.toThrow('billing_accounts_legacy_included_pro')
+  })
   it('is callable only by the service role', async () => {
     for (const role of ['anon', 'authenticated']) {
-      const [row] = await sql!`select has_function_privilege(${role},'public.redeem_appsumo_code(uuid,text,integer)','EXECUTE') as allowed`
-      expect(row.allowed).toBe(false)
+      for (const fn of ['public.redeem_appsumo_code(uuid,text)', 'public.revoke_appsumo_code(text)']) {
+        const [row] = await sql!`select has_function_privilege(${role},${fn},'EXECUTE') as allowed`
+        expect(row.allowed).toBe(false)
+      }
     }
   })
 })

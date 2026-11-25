@@ -13,7 +13,7 @@ const props = { apiBase: '/api', accessToken: 'token' }
 function summary(overrides: Partial<BillingSummary> = {}): BillingSummary {
   return { enabled: true, deployment: 'cloud', plan: null, lifecycle: 'none', allowed: { manageBilling: true }, plans: [], ...overrides }
 }
-const redeemed = summary({ appsumo: true, isLegacy: true, plan: 'pro', lifecycle: 'active' })
+const redeemed = summary({ includedPro: 'appsumo', plan: 'pro', lifecycle: 'active' })
 
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(getBillingSummary).mockResolvedValue(summary()) })
 afterEach(() => { cleanup(); window.history.replaceState({}, '', '/') })
@@ -79,12 +79,26 @@ it('warns AppSumo users that an active Stripe subscription keeps charging', asyn
   vi.mocked(getBillingSummary).mockResolvedValue({ ...redeemed, plan: 'studio', paidSubscriptionActive: true, canManageSubscription: true })
   render(<BillingSettings {...props} />)
   expect(await screen.findByRole('heading', { name: 'Cloud active' })).toBeInTheDocument()
-  expect(screen.getByRole('note')).toHaveTextContent('it will keep charging you')
+  expect(screen.getByText('Your Stripe subscription keeps renewing. AppSumo lifetime Pro takes over when it ends.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Manage billing' })).toBeInTheDocument()
+})
+
+it('tells AppSumo users with a cancelled Stripe subscription when it ends, not that it keeps charging', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue({ ...redeemed, plan: 'studio', paidSubscriptionActive: true, cancelAtPeriodEnd: true, currentPeriodEnd: '2026-12-15T12:00:00Z', canManageSubscription: true })
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText(/^Your Stripe subscription ends .*2026\. AppSumo lifetime Pro continues after that\.$/)).toBeInTheDocument()
+  expect(screen.queryByText(/keeps renewing/)).not.toBeInTheDocument()
 })
 
 it('tells paying users before redeeming that Stripe is not cancelled automatically', async () => {
   vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle: 'active', paidSubscriptionActive: true, canManageSubscription: true }))
   render(<BillingSettings {...props} />)
   expect(await screen.findByText(/Redeeming does not cancel it/)).toBeInTheDocument()
+})
+
+it('does not tell users whose Stripe cancellation is already scheduled to cancel again', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle: 'active', paidSubscriptionActive: true, cancelAtPeriodEnd: true, canManageSubscription: true }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByLabelText('AppSumo code')).toBeInTheDocument()
+  expect(screen.queryByText(/Redeeming does not cancel it/)).not.toBeInTheDocument()
 })

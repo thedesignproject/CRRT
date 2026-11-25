@@ -157,10 +157,9 @@ export interface BillingUsageItem {
 
 export interface BillingSummary {
   enabled: boolean
-  isLegacy?: boolean
-  /** The account redeemed an AppSumo lifetime code (included Cloud Pro). */
-  appsumo?: boolean
-  /** A Stripe subscription is active or trialing and still renews. */
+  /** Why the account has Cloud Pro without Stripe; null when it pays normally. */
+  includedPro?: 'early_access' | 'appsumo' | null
+  /** A Stripe subscription is active or trialing (it may be set to cancel). */
   paidSubscriptionActive?: boolean
   testMode?: boolean
   deployment?: 'cloud' | 'self-hosted'
@@ -340,8 +339,7 @@ type LegacyBillingSummary = {
   periodEnd?: string | null
   plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' | 'year' }>
   entitlements?: {
-    isLegacy?: boolean
-    appsumo?: boolean
+    includedPro?: 'early_access' | 'appsumo' | null
     plan: BillingPlanKey | null
     status: string
     trialUsed?: boolean
@@ -374,8 +372,7 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
   const priceEntries = legacy.plans?.map((plan) => [plan.id, { amount: plan.amount, interval: plan.interval }] as const)
   return {
     enabled: legacy.enabled,
-    isLegacy: entitlement.isLegacy,
-    appsumo: entitlement.appsumo,
+    includedPro: entitlement.includedPro,
     paidSubscriptionActive: entitlement.status === 'active' || entitlement.status === 'trialing',
     testMode: legacy.testMode,
     deployment: 'cloud',

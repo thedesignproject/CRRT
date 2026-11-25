@@ -19,11 +19,12 @@ function date(value: string | null | undefined) {
 
 function lifecycleCopy(summary: BillingSummary) {
   const lifecycle = summary.lifecycle ?? summary.status ?? 'none'
-  if (summary.appsumo) {
-    if (summary.paidSubscriptionActive) return { label: 'Cloud active', detail: 'Your Stripe subscription is still active and keeps renewing. AppSumo lifetime Pro takes over when it ends.' }
-    return { label: 'AppSumo lifetime · Cloud Pro', detail: 'Cloud Pro is included for life with your AppSumo deal. Upgrade to Studio whenever you need more capacity.' }
+  if (summary.includedPro === 'appsumo') {
+    if (!summary.paidSubscriptionActive) return { label: 'AppSumo lifetime · Cloud Pro', detail: 'Cloud Pro is included for life with your AppSumo deal. Upgrade to Studio whenever you need more capacity.' }
+    if (summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Your Stripe subscription ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. AppSumo lifetime Pro continues after that.` }
+    return { label: 'Cloud active', detail: 'Your Stripe subscription keeps renewing. AppSumo lifetime Pro takes over when it ends.' }
   }
-  if (summary.isLegacy) {
+  if (summary.includedPro) {
     if (summary.plan === 'pro') return { label: 'Cloud Pro included', detail: 'Your early-user Pro access is included at no charge. Upgrade to Studio whenever you need more capacity.' }
     if (summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Studio ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. Your included Pro access continues.` }
   }
@@ -106,14 +107,7 @@ function AppsumoRedeemCard({ apiBase, accessToken, summary, focusOnLoad, justRed
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const sectionRef = useRef<HTMLElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!focusOnLoad) return
-    sectionRef.current?.scrollIntoView?.({ block: 'center' })
-    inputRef.current?.focus()
-  }, [focusOnLoad])
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -134,22 +128,17 @@ function AppsumoRedeemCard({ apiBase, accessToken, summary, focusOnLoad, justRed
     }
   }
 
-  const stripeWarning = summary.paidSubscriptionActive
-    ? <p role="note" className="mt-4 rounded-md bg-muted px-4 py-3 text-sm leading-6 text-foreground">You also have an active Stripe subscription, and it will keep charging you. To stop it, cancel in <strong>Manage billing</strong>. AppSumo lifetime Pro continues after it ends.</p>
-    : null
-
   return (
-    <section ref={sectionRef} id="appsumo" aria-labelledby="appsumo-heading" className="rounded-xl border border-border bg-card p-6 lg:p-8">
+    <section id="appsumo" aria-labelledby="appsumo-heading" className="rounded-xl border border-border bg-card p-6 lg:p-8">
       <div className="flex items-start gap-3">
         <Gift size={18} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h2 id="appsumo-heading" className="text-base font-semibold">Redeem AppSumo code</h2>
-          {summary.appsumo ? (
+          {summary.includedPro === 'appsumo' ? (
             <div role="status">
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {justRedeemed ? 'Code redeemed. ' : ''}Your AppSumo lifetime deal is active: Cloud Pro with 10 projects, 10 collaborators, 2,000 comments and 5 audits per month.
               </p>
-              {stripeWarning}
             </div>
           ) : (
             <>
@@ -159,6 +148,7 @@ function AppsumoRedeemCard({ apiBase, accessToken, summary, focusOnLoad, justRed
                   <label htmlFor="appsumo-code" className="sr-only">AppSumo code</label>
                   <input
                     ref={inputRef}
+                    autoFocus={focusOnLoad}
                     id="appsumo-code"
                     name="appsumo-code"
                     value={code}
@@ -179,7 +169,7 @@ function AppsumoRedeemCard({ apiBase, accessToken, summary, focusOnLoad, justRed
                 </button>
               </form>
               {error ? <p id="appsumo-error" role="alert" className="mt-3 text-sm text-status-rejected">{error}</p> : null}
-              {summary.paidSubscriptionActive ? <p className="mt-4 text-xs leading-5 text-muted-foreground">You have an active Stripe subscription. Redeeming does not cancel it; cancel it in Manage billing to stop being charged.</p> : null}
+              {summary.paidSubscriptionActive && !summary.cancelAtPeriodEnd ? <p className="mt-4 text-xs leading-5 text-muted-foreground">You have an active Stripe subscription. Redeeming does not cancel it; cancel it in Manage billing to stop being charged.</p> : null}
             </>
           )}
         </div>
@@ -274,7 +264,7 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
   const hasWriteAccess = lifecycle === 'trialing' || lifecycle === 'active'
   const paymentBlocked = lifecycle === 'past_due_grace' || lifecycle === 'read_only'
   const changingPlan = hasWriteAccess && summary.plan !== selectedPlan
-  const legacyStudioUpgrade = Boolean(summary.isLegacy && summary.plan === 'pro' && selectedPlan === 'studio')
+  const legacyStudioUpgrade = Boolean(summary.includedPro && summary.plan === 'pro' && selectedPlan === 'studio')
   const canChangePlan = summary.actions?.changePlan !== false
   const selectedPlanName: Record<BillingPlanKey, string> = { pro: 'Pro', studio: 'Studio' }
   const actionLabel = legacyStudioUpgrade
@@ -320,9 +310,9 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
             {summary.scheduledPlan ? <p className="text-xs text-muted-foreground">{summary.scheduledPlan} scheduled for {date(summary.scheduledPlanAt)}</p> : null}
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {cloudPlans.map((plan) => <PlanOption key={plan.key} plan={plan} price={summary.planPrices?.[plan.key]} current={summary.plan === plan.key} included={Boolean(summary.isLegacy && plan.key === 'pro')} scheduled={summary.scheduledPlan === plan.key} selected={selectedPlan === plan.key} disabled={blocked || Boolean(summary.isLegacy && plan.key === 'pro')} onSelect={() => setSelectedPlan(plan.key)} />)}
+            {cloudPlans.map((plan) => <PlanOption key={plan.key} plan={plan} price={summary.planPrices?.[plan.key]} current={summary.plan === plan.key} included={Boolean(summary.includedPro && plan.key === 'pro')} scheduled={summary.scheduledPlan === plan.key} selected={selectedPlan === plan.key} disabled={blocked || Boolean(summary.includedPro && plan.key === 'pro')} onSelect={() => setSelectedPlan(plan.key)} />)}
           </div>
-          {summary.cancelAtPeriodEnd ? <p role="status" className="mt-5 rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">Cancellation is scheduled. {summary.isLegacy ? 'After cancellation, you return to your included Cloud Pro access.' : `Your data stays available; use Manage billing to reactivate before ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.`}</p> : null}
+          {summary.cancelAtPeriodEnd ? <p role="status" className="mt-5 rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">Cancellation is scheduled. {summary.includedPro ? 'After cancellation, you return to your included Cloud Pro access.' : `Your data stays available; use Manage billing to reactivate before ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.`}</p> : null}
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 text-xs text-muted-foreground">
             <p>Need full control? <a href={landingRoute('/docs/self-host')} className="font-semibold text-foreground underline underline-offset-4">Self-hosted is free.</a></p>
             <button type="button" disabled={busyAction !== null} className="inline-flex items-center gap-2 font-semibold text-foreground disabled:opacity-50" onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={13} />Refresh status</button>

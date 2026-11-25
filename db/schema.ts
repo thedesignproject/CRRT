@@ -1374,7 +1374,10 @@ export const billingAccounts = pgTable('billing_accounts', {
   priceId: text('price_id'),
   plan: text('plan'),
   trialUsed: boolean('trial_used').notNull().default(false),
+  // Permanent record of early users; never cleared. Grants come from included_pro.
   isLegacy: boolean('is_legacy').notNull().default(false),
+  // Why the account has Cloud Pro without a Stripe subscription; null when it pays normally.
+  includedPro: text('included_pro'),
   periodStart: timestamp('period_start', { withTimezone: true }),
   graceUntil: timestamp('grace_until', { withTimezone: true }),
   periodEnd: timestamp('period_end', { withTimezone: true }),
@@ -1385,11 +1388,15 @@ export const billingAccounts = pgTable('billing_accounts', {
   lockToken: uuid('lock_token'),
   lockExpiresAt: timestamp('lock_expires_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}).enableRLS()
+}, (t) => ({
+  includedPro: check('billing_accounts_included_pro', sql`${t.includedPro} in ('early_access','appsumo')`),
+  // Ending early access is a deliberate migration: drop this check first.
+  legacyIncludedPro: check('billing_accounts_legacy_included_pro', sql`not ${t.isLegacy} or ${t.includedPro} is not null`),
+})).enableRLS()
 
 // AppSumo lifetime deals. Every code from the AppSumo CSV is preloaded; a code
-// is redeemed once, and each user can hold one. Redemption grants included Cloud
-// Pro through billing_accounts.is_legacy, the same no-Stripe path early users use.
+// is redeemed once, and each user can hold one. Redemption sets
+// billing_accounts.included_pro='appsumo'.
 export const appsumoCodes = pgTable('appsumo_codes', {
   code: text('code').primaryKey(),
   redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
@@ -4520,11 +4527,21 @@ NOTIFY pgrst, 'reload schema';
 `;
 
 
-export const appsumoSql = `
--- Serialize each user's redemptions so the per-user limit and the one-code rule
+// Re-create every function that granted Pro from is_legacy so it reads included_pro.
+function includedProFunction(source: string, name: string, from: string, to: string) {
+  const fn = source.match(new RegExp('CREATE (?:OR REPLACE )?FUNCTION public\\.' + name + '\\([\\s\\S]*?\\$\\$;'))![0]
+  return fn.replace(/CREATE (OR REPLACE )?FUNCTION/, 'CREATE OR REPLACE FUNCTION').replace(from, to)
+}
+
+export const appsumoSql = [
+  includedProFunction(legacyBillingSql, 'cloud_effective_account', 'IF b.is_legacy AND', 'IF b.included_pro IS NOT NULL AND'),
+  includedProFunction(legacyBillingSql, 'delete_unbilled_legacy_account', 'AND is_legacy\n', 'AND (is_legacy OR included_pro IS NOT NULL)\n'),
+  includedProFunction(legacyBillingSql, 'create_approved_widget_agent_share', 'NOT coalesce(v_billing.is_legacy,false)', 'v_billing.included_pro IS NULL'),
+  includedProFunction(recordSql, 'record_charge_payload', 'coalesce(billing.is_legacy,false)', 'billing.included_pro IS NOT NULL'),
+  `-- Serialize each user's redemptions so the per-user limit and the one-code rule
 -- cannot race. The conditional UPDATE is the atomic claim: a concurrent caller
 -- re-reads the committed row and finds it already redeemed.
-CREATE FUNCTION public.redeem_appsumo_code(p_user uuid, p_code text, p_max_failures integer DEFAULT 10)
+CREATE FUNCTION public.redeem_appsumo_code(p_user uuid, p_code text)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_code text; v_now timestamptz:=clock_timestamp();
 BEGIN
@@ -4532,7 +4549,7 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('crrt-appsumo:' || p_user::text, 0));
   IF EXISTS(SELECT 1 FROM public.appsumo_codes WHERE redeemed_by_user_id=p_user) THEN RETURN 'already_has_plan'; END IF;
   IF (SELECT count(*) FROM public.appsumo_redemption_attempts
-      WHERE user_id=p_user AND created_at>v_now-interval '1 hour')>=p_max_failures THEN
+      WHERE user_id=p_user AND created_at>v_now-interval '1 hour')>=10 THEN
     RETURN 'rate_limited';
   END IF;
   UPDATE public.appsumo_codes SET redeemed_at=v_now, redeemed_by_user_id=p_user
@@ -4542,16 +4559,33 @@ BEGIN
     IF EXISTS(SELECT 1 FROM public.appsumo_codes WHERE code=p_code) THEN RETURN 'already_redeemed'; END IF;
     RETURN 'invalid_code';
   END IF;
-  INSERT INTO public.billing_accounts(user_id,is_legacy) VALUES (p_user,true)
-    ON CONFLICT (user_id) DO UPDATE SET is_legacy=true, updated_at=now();
+  -- Lifetime outranks early access; is_legacy still records the early user.
+  INSERT INTO public.billing_accounts(user_id,included_pro) VALUES (p_user,'appsumo')
+    ON CONFLICT (user_id) DO UPDATE SET included_pro='appsumo', updated_at=now();
   RETURN 'redeemed';
 END;
 $$;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION public.redeem_appsumo_code(uuid,text,integer) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.redeem_appsumo_code(uuid,text,integer) TO service_role;
+-- Refunds: the code stays used (redeemed_at is kept) but no longer belongs to
+-- anyone, and the account falls back to early access or to no included plan.
+-- shortcut: assumes early access is still running; update this when it ends.
+CREATE FUNCTION public.revoke_appsumo_code(p_code text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_user uuid;
+BEGIN
+  SELECT redeemed_by_user_id INTO v_user FROM public.appsumo_codes
+    WHERE code=p_code AND redeemed_by_user_id IS NOT NULL FOR UPDATE;
+  IF NOT FOUND THEN RETURN false; END IF;
+  UPDATE public.appsumo_codes SET redeemed_by_user_id=NULL WHERE code=p_code;
+  UPDATE public.billing_accounts SET included_pro=CASE WHEN is_legacy THEN 'early_access' END, updated_at=now()
+    WHERE user_id=v_user AND included_pro='appsumo';
+  RETURN true;
+END;
+$$;
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION public.cloud_entitlements(p_owner uuid) RETURNS jsonb
+REVOKE ALL ON FUNCTION public.redeem_appsumo_code(uuid,text), public.revoke_appsumo_code(text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.redeem_appsumo_code(uuid,text) TO service_role;`,
+  `CREATE OR REPLACE FUNCTION public.cloud_entitlements(p_owner uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE b public.billing_accounts%ROWTYPE; v_projects integer; v_users integer; v_writes boolean:=false;
 BEGIN
@@ -4561,15 +4595,13 @@ BEGIN
   BEGIN PERFORM public.cloud_validate_write(p_owner); v_writes:=true;
     EXCEPTION WHEN raise_exception THEN v_writes:=false; END;
   RETURN jsonb_build_object('mode',CASE WHEN public.cloud_enabled() THEN 'cloud' ELSE 'community' END,
-    'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,'status',coalesce(b.subscription_status,'none'),'canWrite',v_writes,'trialUsed',coalesce(b.trial_used,false),
-    'appsumo',EXISTS(SELECT 1 FROM public.appsumo_codes WHERE redeemed_by_user_id=p_owner),
+    'isLegacy',coalesce(b.is_legacy,false),'includedPro',b.included_pro,'plan',b.plan,'status',coalesce(b.subscription_status,'none'),'canWrite',v_writes,'trialUsed',coalesce(b.trial_used,false),
     'resetAt',(SELECT w.window_end FROM public.cloud_usage_window(b.period_start,b.period_end) w),'usage',jsonb_build_object('projects',v_projects,'internal_users',v_users,
     'comments',public.cloud_usage_count(p_owner,'comments'),'product_audits',public.cloud_usage_count(p_owner,'product_audits')),
     'limits',jsonb_build_object('projects',public.cloud_limit(p_owner,'projects'),
     'internal_users',public.cloud_limit(p_owner,'internal_users'),'comments',public.cloud_limit(p_owner,'comments'),
     'product_audits',public.cloud_limit(p_owner,'product_audits')));
 END;
-$$;
---> statement-breakpoint
-NOTIFY pgrst, 'reload schema';
-`;
+$$;`,
+  `NOTIFY pgrst, 'reload schema';`,
+].join('\n--> statement-breakpoint\n') + '\n'

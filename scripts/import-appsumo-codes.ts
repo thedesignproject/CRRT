@@ -23,17 +23,11 @@ export function parseAppsumoCsv(text: string) {
   return { codes, duplicates, header }
 }
 
-export async function importAppsumoCodes(sql: postgres.Sql, codes: string[], batchSize = 1000) {
-  let inserted = 0
-  await sql.begin(async transaction => {
-    for (let start = 0; start < codes.length; start += batchSize) {
-      const batch = codes.slice(start, start + batchSize)
-      const rows = await transaction`insert into public.appsumo_codes(code) select unnest(${batch}::text[])
-        on conflict (code) do nothing returning code`
-      inserted += rows.length
-    }
-  })
-  return { inserted, existing: codes.length - inserted }
+// One statement is atomic: a bad code rolls back the whole import.
+export async function importAppsumoCodes(sql: postgres.Sql, codes: string[]) {
+  const rows = await sql`insert into public.appsumo_codes(code) select unnest(${codes}::text[])
+    on conflict (code) do nothing returning code`
+  return { inserted: rows.length, existing: codes.length - rows.length }
 }
 
 if (import.meta.main) {

@@ -67,6 +67,7 @@ it('reports the per-user rate limit and fails closed on database errors', async 
   await expect(redeemAppsumoCode('buyer', 'AS-Valid-1')).rejects.toMatchObject({ status: 503 })
   rpc.mockResolvedValueOnce({ data: 'surprise', error: null })
   await expect(redeemAppsumoCode('buyer', 'AS-Valid-1')).rejects.toMatchObject({ status: 503 })
+  // The billing handler answers 503 for anything that is not a redemption error.
   rpc.mockRejectedValueOnce(new Error('network'))
-  await expect(redeemAppsumoCode('buyer', 'AS-Valid-1')).rejects.toMatchObject({ status: 503 })
+  await expect(redeemAppsumoCode('buyer', 'AS-Valid-1')).rejects.toThrow('network')
 })

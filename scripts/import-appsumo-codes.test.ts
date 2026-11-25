@@ -12,11 +12,9 @@ it('rejects files that are not one column of codes', () => {
   expect(() => parseAppsumoCsv('A1,extra\n')).toThrow('Line 1 has more than one column')
   expect(() => parseAppsumoCsv('x'.repeat(129))).toThrow('longer than 128')
 })
-it('inserts in batches inside one transaction and counts codes that already existed', async () => {
+it('inserts every code in one statement and counts codes that already existed', async () => {
   const existing = new Set(['B'])
-  const transaction = vi.fn(async (_strings: TemplateStringsArray, batch: string[]) => batch.filter(code => !existing.has(code)).map(code => ({ code })))
-  const sql = { begin: vi.fn(async (run: (tx: typeof transaction) => Promise<void>) => run(transaction)) }
-  expect(await importAppsumoCodes(sql as never, ['A', 'B', 'C'], 2)).toEqual({ inserted: 2, existing: 1 })
-  expect(sql.begin).toHaveBeenCalledTimes(1)
-  expect(transaction.mock.calls.map(call => call[1])).toEqual([['A', 'B'], ['C']])
+  const sql = vi.fn(async (_strings: TemplateStringsArray, codes: string[]) => codes.filter(code => !existing.has(code)).map(code => ({ code })))
+  expect(await importAppsumoCodes(sql as never, ['A', 'B', 'C'])).toEqual({ inserted: 2, existing: 1 })
+  expect(sql.mock.calls.map(call => call[1])).toEqual([['A', 'B', 'C']])
 })
