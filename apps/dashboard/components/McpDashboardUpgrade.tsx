@@ -3,7 +3,7 @@ import { route } from '../lib/routes'
 import { LoginPage } from './LoginPage'
 import { Spinner } from './primitives'
 
-export const DASHBOARD_PERMISSION_DESCRIPTION = 'Read and manage your projects, feedback, inbox, repository settings, members, invitations, access rules, integrations, external work, shares, recordings, audits, notifications, MCP connections, and billing flows. Administrative views require your actual administrator role. Your project roles, ownership, plan limits, and feature availability still apply.'
+export const DASHBOARD_PERMISSION_DESCRIPTION = 'Read and manage your projects, feedback, inbox, repository settings, members, invitations, access rules, integrations, external work, shares, recordings, audits, notifications, MCP connections, and a read-only billing summary. Billing changes stay in the CRRT dashboard. Administrative views require your actual administrator role. Your project roles, ownership, plan limits, and feature availability still apply.'
 
 type Upgrade = { name: string; state: 'pending' | 'approved' | 'declined' | 'expired'; bundle: string }
 export function McpDashboardUpgrade({ apiBase, accessToken, requestId }: { apiBase: string; accessToken: string | null; requestId: string }) {

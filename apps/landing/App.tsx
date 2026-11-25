@@ -7,6 +7,7 @@ import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
+import { TermsPage } from './legal/TermsPage'
 import { AppsumoPage } from './legal/AppsumoPage'
 import { ThemeProvider } from '../../src/design-system'
 import { ResourcesPage } from './resources/ResourcesPage'
@@ -50,6 +51,10 @@ function RoutedApp() {
 
   if (publicPath === '/support') {
     return <SupportPage />
+  }
+
+  if (publicPath === '/terms') {
+    return <TermsPage />
   }
 
   if (publicPath === '/appsumo') {

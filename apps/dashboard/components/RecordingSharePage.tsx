@@ -20,6 +20,7 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
   const [videoAspect, setVideoAspect] = useState(16 / 9)
   const [playing, setPlaying] = useState(false), [volume, setVolume] = useState(1)
   const [speed, setSpeed] = useState(1), [mediaError, setMediaError] = useState('')
+  const [frameReady, setFrameReady] = useState(false)
   const composition = useRef<HTMLDivElement>(null)
   const player = useRef<HTMLVideoElement>(null), camera = useRef<HTMLVideoElement>(null)
   useEffect(() => {
@@ -113,8 +114,9 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
       <div className="recording-detail-grid"><div className="recording-detail-main">
       {screen ? <div ref={composition} className="recording-composed-player recording-player">
         <div className="recording-player-stage" style={{ maxWidth: fullscreen ? `calc((100dvh - 8rem) * ${videoAspect})` : `calc(65dvh * ${videoAspect})` }}>
-        <video ref={player} playsInline hidden className="recording-decoder" aria-label="Recording video" onLoadedMetadata={event => { const video = event.currentTarget; if (video.videoWidth && video.videoHeight) setVideoAspect(video.videoWidth / video.videoHeight) }} onTimeUpdate={syncFace} onSeeked={syncFace} onPlay={() => { setPlaying(true); void camera.current?.play() }} onPause={() => { setPlaying(false); camera.current?.pause() }} onEnded={() => setPlaying(false)} onError={() => setMediaError('The video could not load. Check your connection and reload the page.')} />
+        <video ref={player} playsInline hidden className="recording-decoder" aria-label="Recording video" onLoadedMetadata={event => { const video = event.currentTarget; if (video.videoWidth && video.videoHeight) setVideoAspect(video.videoWidth / video.videoHeight) }} onLoadedData={() => setFrameReady(true)} onTimeUpdate={syncFace} onSeeked={syncFace} onPlay={() => { setPlaying(true); void camera.current?.play() }} onPause={() => { setPlaying(false); camera.current?.pause() }} onEnded={() => setPlaying(false)} onError={() => setMediaError('The video could not load. Check your connection and reload the page.')} />
         <RecordingVideoCanvas source={player} crop={false} label="Recording picture" className="recording-primary-video" />
+        {!frameReady && !mediaError && <div className="recording-player-loading" role="status"><Loader2 size={20} aria-hidden="true" /><span>Loading video…</span></div>}
         {playback.recording.source !== 'tab' && <RecordingMarks events={playback.events} atMs={playbackMs} />}
         {face && cameraVisible && <div className="recording-camera-clip"><video ref={camera} muted playsInline aria-label="Camera" hidden /><RecordingVideoCanvas source={camera} /></div>}
         </div>

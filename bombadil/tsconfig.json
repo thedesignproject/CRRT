@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "baseUrl": ".",
+    "paths": {
+      "@antithesishq/bombadil": ["./node_modules/@antithesishq/bombadil/dist/index.d.ts"],
+      "@antithesishq/bombadil/*": ["./node_modules/@antithesishq/bombadil/dist/*"]
+    }
+  },
+  "include": ["*.ts"]
+}

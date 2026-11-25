@@ -58,6 +58,7 @@ export function LegalLayout({
           </a>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, fontFamily: 'var(--crrt-font-mono)', fontSize: 12 }}>
             <a href="/privacy" style={linkStyle}>Privacy</a>
+            <a href="/terms" style={linkStyle}>Terms</a>
             <a href="/support" style={linkStyle}>Support</a>
             <a href="/docs/install" style={linkStyle}>Docs</a>
           </div>

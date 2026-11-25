@@ -8,7 +8,12 @@ export interface UseCommentsResult {
   loading: boolean
   error: string | null
   refresh: (canApply?: () => boolean) => Promise<void>
+  /** Reloads without the loading state, e.g. to renew signed screenshot links in place. */
+  refreshInBackground: () => Promise<void>
 }
+
+// Refresh before the five-minute signed screenshot links expire.
+export const SCREENSHOT_REFRESH_MS = 240_000
 
 export function useComments(apiBase: string, accessToken: string, projectId: string | null): UseCommentsResult {
   const [comments, setComments] = useState<CommentRecord[]>([])
@@ -55,6 +60,7 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
   }, [apiBase, accessToken, projectId])
 
   const refresh = useCallback((canApply?: () => boolean) => loadComments(false, canApply), [loadComments])
+  const refreshInBackground = useCallback(() => loadComments(true), [loadComments])
 
   // Clear previous project's data before the next fetch lands.
   useEffect(() => {
@@ -79,6 +85,16 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
     }
   }, [loadComments])
 
+  // Screenshot links are signed for five minutes. Renew them while the page stays
+  // open and focused, which the focus refresh above does not cover.
+  useEffect(() => {
+    if (!projectId) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadComments(true)
+    }, SCREENSHOT_REFRESH_MS)
+    return () => window.clearInterval(timer)
+  }, [loadComments, projectId])
+
   // Provider closure runs in the background after feedback is rejected. Poll
   // only while a link is transitional so the buttons settle without a reload.
   // A one-shot timer avoids overlapping requests; the next response schedules
@@ -90,5 +106,5 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
     return () => window.clearTimeout(timer)
   }, [comments, loadComments])
 
-  return { comments, commentsProjectId, loading, error, refresh }
+  return { comments, commentsProjectId, loading, error, refresh, refreshInBackground }
 }
