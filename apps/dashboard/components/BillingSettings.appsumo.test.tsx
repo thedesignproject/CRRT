@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../api')>(),
@@ -80,6 +80,8 @@ it('warns AppSumo users that an active Stripe subscription keeps charging', asyn
   render(<BillingSettings {...props} />)
   expect(await screen.findByRole('heading', { name: 'Cloud active' })).toBeInTheDocument()
   expect(screen.getByText('Your Stripe subscription keeps renewing. Cancel it in Manage billing to stop paying; AppSumo lifetime Pro takes over when it ends.')).toBeInTheDocument()
+  // The lifecycle text is the one place that says it; the AppSumo card does not repeat it.
+  expect(within(screen.getByRole('region', { name: 'Redeem AppSumo code' })).queryByText(/Stripe/)).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Manage billing' })).toBeInTheDocument()
 })
 
