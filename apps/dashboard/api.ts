@@ -157,7 +157,10 @@ export interface BillingUsageItem {
 
 export interface BillingSummary {
   enabled: boolean
-  isLegacy?: boolean
+  /** Why the account has Cloud Pro without Stripe; null when it pays normally. */
+  includedPro?: 'early_access' | 'appsumo' | null
+  /** A Stripe subscription is active or trialing (it may be set to cancel). */
+  paidSubscriptionActive?: boolean
   testMode?: boolean
   deployment?: 'cloud' | 'self-hosted'
   plan?: BillingPlanKey | 'community' | null
@@ -336,7 +339,7 @@ type LegacyBillingSummary = {
   periodEnd?: string | null
   plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' | 'year' }>
   entitlements?: {
-    isLegacy?: boolean
+    includedPro?: 'early_access' | 'appsumo' | null
     plan: BillingPlanKey | null
     status: string
     trialUsed?: boolean
@@ -369,7 +372,8 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
   const priceEntries = legacy.plans?.map((plan) => [plan.id, { amount: plan.amount, interval: plan.interval }] as const)
   return {
     enabled: legacy.enabled,
-    isLegacy: entitlement.isLegacy,
+    includedPro: entitlement.includedPro,
+    paidSubscriptionActive: entitlement.status === 'active' || entitlement.status === 'trialing',
     testMode: legacy.testMode,
     deployment: 'cloud',
     plan: entitlement.plan,
@@ -430,6 +434,14 @@ export function runBillingAction(apiBase: string, accessToken: string, action: B
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
     body: JSON.stringify({ action, ...(plan ? { plan } : {}), ...(state ? { state } : {}), ...(cycle ? { cycle } : {}) }),
+  })
+}
+
+export function redeemAppsumoCode(apiBase: string, accessToken: string, code: string) {
+  return requestJson<{ redeemed: true }>(`${apiBase}/v1/billing`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ action: 'redeem_appsumo', code }),
   })
 }
 
