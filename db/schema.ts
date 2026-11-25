@@ -4535,7 +4535,8 @@ function includedProFunction(source: string, name: string, from: string, to: str
 
 export const appsumoSql = [
   includedProFunction(legacyBillingSql, 'cloud_effective_account', 'IF b.is_legacy AND', 'IF b.included_pro IS NOT NULL AND'),
-  includedProFunction(legacyBillingSql, 'delete_unbilled_legacy_account', 'AND is_legacy\n', 'AND (is_legacy OR included_pro IS NOT NULL)\n'),
+  // Every row without Stripe history is a placeholder, including one an AppSumo refund leaves.
+  includedProFunction(legacyBillingSql, 'delete_unbilled_legacy_account', ' AND is_legacy\n', '\n'),
   includedProFunction(legacyBillingSql, 'create_approved_widget_agent_share', 'NOT coalesce(v_billing.is_legacy,false)', 'v_billing.included_pro IS NULL'),
   includedProFunction(recordSql, 'record_charge_payload', 'coalesce(billing.is_legacy,false)', 'billing.included_pro IS NOT NULL'),
   `-- Serialize each user's redemptions so the per-user limit and the one-code rule

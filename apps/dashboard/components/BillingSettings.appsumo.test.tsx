@@ -79,7 +79,7 @@ it('warns AppSumo users that an active Stripe subscription keeps charging', asyn
   vi.mocked(getBillingSummary).mockResolvedValue({ ...redeemed, plan: 'studio', paidSubscriptionActive: true, canManageSubscription: true })
   render(<BillingSettings {...props} />)
   expect(await screen.findByRole('heading', { name: 'Cloud active' })).toBeInTheDocument()
-  expect(screen.getByText('Your Stripe subscription keeps renewing. AppSumo lifetime Pro takes over when it ends.')).toBeInTheDocument()
+  expect(screen.getByText('Your Stripe subscription keeps renewing. Cancel it in Manage billing to stop paying; AppSumo lifetime Pro takes over when it ends.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Manage billing' })).toBeInTheDocument()
 })
 

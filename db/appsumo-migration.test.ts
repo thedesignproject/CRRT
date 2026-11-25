@@ -27,7 +27,7 @@ it('moves early users to included_pro before the checks that require it', () => 
 it('grants included Pro from included_pro in every function that used is_legacy', () => {
   for (const grant of [
     'IF b.included_pro IS NOT NULL AND NOT coalesce(',
-    'WHERE user_id=OLD.id AND (is_legacy OR included_pro IS NOT NULL)',
+    'WHERE user_id=OLD.id\n    AND customer_id IS NULL',
     'IF v_billing.included_pro IS NULL AND NOT coalesce(',
     'IF NOT FOUND OR NOT (billing.included_pro IS NOT NULL OR coalesce(',
   ]) expect(appsumoSql).toContain(grant)

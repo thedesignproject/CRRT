@@ -84,6 +84,16 @@ integration('AppSumo redemption on Postgres', () => {
     expect((await sql!`select included_pro from billing_accounts where user_id=${owner}`)[0].included_pro).toBeNull()
     const [entitlements] = await sql!`select cloud_entitlements(${owner}) as value`
     expect(entitlements.value).toMatchObject({ includedPro: null, canWrite: false })
+    // The empty billing row a refund leaves must not block deleting the account.
+    await sql!`delete from auth.users where id=${owner}`
+    expect(await sql!`select 1 from billing_accounts where user_id=${owner}`).toHaveLength(0)
+  })
+  it('lets an AppSumo buyer delete their account, keeping the code used', async () => {
+    const owner = await user(), value = await code()
+    expect(await redeem(owner, value)).toBe('redeemed')
+    await sql!`delete from auth.users where id=${owner}`
+    expect(await sql!`select 1 from billing_accounts where user_id=${owner}`).toHaveLength(0)
+    expect(await redeem(await user(), value)).toBe('already_redeemed')
   })
   it('never lets an early user lose included Pro, and accepts only known reasons', async () => {
     const owner = await user()

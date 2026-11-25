@@ -47,7 +47,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.delete_unbilled_legacy_account() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
-  DELETE FROM public.billing_accounts WHERE user_id=OLD.id AND (is_legacy OR included_pro IS NOT NULL)
+  DELETE FROM public.billing_accounts WHERE user_id=OLD.id
     AND customer_id IS NULL AND subscription_id IS NULL AND price_id IS NULL
     AND checkout_session_id IS NULL AND checkout_payload IS NULL
     AND plan IS NULL AND subscription_status IS NULL AND NOT trial_used

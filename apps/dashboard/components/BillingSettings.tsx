@@ -22,7 +22,7 @@ function lifecycleCopy(summary: BillingSummary) {
   if (summary.includedPro === 'appsumo') {
     if (!summary.paidSubscriptionActive) return { label: 'AppSumo lifetime · Cloud Pro', detail: 'Cloud Pro is included for life with your AppSumo deal. Upgrade to Studio whenever you need more capacity.' }
     if (summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Your Stripe subscription ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. AppSumo lifetime Pro continues after that.` }
-    return { label: 'Cloud active', detail: 'Your Stripe subscription keeps renewing. AppSumo lifetime Pro takes over when it ends.' }
+    return { label: 'Cloud active', detail: 'Your Stripe subscription keeps renewing. Cancel it in Manage billing to stop paying; AppSumo lifetime Pro takes over when it ends.' }
   }
   if (summary.includedPro) {
     if (summary.plan === 'pro') return { label: 'Cloud Pro included', detail: 'Your early-user Pro access is included at no charge. Upgrade to Studio whenever you need more capacity.' }
