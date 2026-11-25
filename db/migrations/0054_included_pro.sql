@@ -218,7 +218,7 @@ END;
 $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.redeem_appsumo_code(uuid,text), public.revoke_appsumo_code(text) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.redeem_appsumo_code(uuid,text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.redeem_appsumo_code(uuid,text), public.revoke_appsumo_code(text) TO service_role;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION public.cloud_entitlements(p_owner uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$

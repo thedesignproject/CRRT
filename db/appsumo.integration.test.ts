@@ -109,5 +109,9 @@ integration('AppSumo redemption on Postgres', () => {
         expect(row.allowed).toBe(false)
       }
     }
+    for (const fn of ['public.redeem_appsumo_code(uuid,text)', 'public.revoke_appsumo_code(text)']) {
+      const [row] = await sql!`select has_function_privilege('service_role',${fn},'EXECUTE') as allowed`
+      expect(row.allowed).toBe(true)
+    }
   })
 })
