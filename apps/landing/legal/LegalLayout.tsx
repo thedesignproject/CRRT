@@ -14,17 +14,11 @@ export function LegalLink({ children, href }: { children: ReactNode; href: strin
 }
 
 export function LegalLayout({
-  actions,
-  aside,
   children,
   description,
   marker,
   title,
 }: {
-  /** Calls to action under the description. */
-  actions?: ReactNode
-  /** A summary shown beside the title on wide screens and under it on narrow ones. */
-  aside?: ReactNode
   children: ReactNode
   description: string
   marker: string
@@ -77,47 +71,42 @@ export function LegalLayout({
           <span className="section-marker">/ {marker}</span>
           <span aria-hidden="true" style={{ background: 'var(--crrt-rule-dark)', flex: 1, height: 1 }} />
         </div>
-        <div className={aside ? 'legal-hero has-aside' : 'legal-hero'}>
-          <div>
-            <h1
-              style={{
-                color: 'var(--crrt-white)',
-                fontFamily: 'var(--crrt-font-mono)',
-                fontSize: 'clamp(34px, 7vw, 64px)',
-                letterSpacing: '-0.045em',
-                lineHeight: 1,
-                margin: 0,
-                maxWidth: 780,
-                textWrap: 'balance',
-              }}
-            >
-              {title}
-            </h1>
-            <p
-              style={{
-                color: 'var(--crrt-ink-faint)',
-                fontFamily: 'var(--crrt-font-body)',
-                fontSize: 'clamp(17px, 2.5vw, 20px)',
-                lineHeight: 1.55,
-                margin: '20px 0 0',
-                maxWidth: 720,
-                textWrap: 'pretty',
-              }}
-            >
-              {description}
-            </p>
-            {actions && <div className="legal-actions">{actions}</div>}
-          </div>
-          {aside}
-        </div>
+        <h1
+          style={{
+            color: 'var(--crrt-white)',
+            fontFamily: 'var(--crrt-font-mono)',
+            fontSize: 'clamp(34px, 7vw, 64px)',
+            letterSpacing: '-0.045em',
+            lineHeight: 1,
+            margin: 0,
+            maxWidth: 780,
+            textWrap: 'balance',
+          }}
+        >
+          {title}
+        </h1>
+        <p
+          style={{
+            color: 'var(--crrt-ink-faint)',
+            fontFamily: 'var(--crrt-font-body)',
+            fontSize: 'clamp(17px, 2.5vw, 20px)',
+            lineHeight: 1.55,
+            margin: '20px 0 0',
+            maxWidth: 720,
+            textWrap: 'pretty',
+          }}
+        >
+          {description}
+        </p>
         <div
           style={{
             borderTop: '1px solid var(--crrt-rule-dark)',
-            marginTop: 'clamp(40px, 6vw, 64px)',
+            marginTop: 'clamp(40px, 7vw, 72px)',
+            maxWidth: 760,
             paddingTop: 'clamp(32px, 5vw, 48px)',
           }}
         >
-          <div style={{ maxWidth: 760 }}>{children}</div>
+          {children}
         </div>
       </main>
 

@@ -1,5 +1,5 @@
-/* Legal and AppSumo pages sit on a dark terminal surface in every landing
-   theme, so they pin the dark tokens that the wordmark, buttons and footer read. */
+/* Legal pages sit on a dark terminal surface in every landing theme, so they
+   pin the dark tokens that the wordmark, buttons and footer read. */
 .legal-surface {
   --background: var(--crrt-bg-deep);
   --foreground: #f8f5f2;
@@ -9,45 +9,4 @@
   --border: rgba(255, 255, 255, .11);
   --landing-page: var(--crrt-bg-deep);
   color-scheme: dark;
-}
-
-.legal-hero { display: grid; gap: clamp(32px, 5vw, 56px); align-items: start; }
-.legal-hero.has-aside { grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr); }
-.legal-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
-.legal-actions .ds-button { text-decoration: none; }
-
-@media (max-width: 860px) {
-  .legal-hero.has-aside { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 520px) {
-  .legal-actions .ds-button { width: 100%; justify-content: center; }
-}
-
-/* AppSumo: what the code unlocks, then three numbered steps. */
-.appsumo-deal { margin: 0; padding: 28px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); }
-.appsumo-deal-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
-.appsumo-deal-head h2 { margin: 0; color: var(--foreground); font: 700 20px/1.2 var(--crrt-font-mono); letter-spacing: -.015em; }
-.appsumo-deal-head span { color: var(--crrt-carrot); font: 600 12px/1 var(--crrt-font-mono); letter-spacing: .04em; text-transform: uppercase; }
-.appsumo-deal dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 16px; margin: 22px 0 0; }
-.appsumo-deal dl div { display: flex; flex-direction: column-reverse; gap: 4px; }
-.appsumo-deal dd { margin: 0; color: var(--foreground); font: 600 32px/1 var(--crrt-font-mono); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-.appsumo-deal dt { color: var(--muted-foreground); font-size: 14px; line-height: 1.35; }
-.appsumo-deal p { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 14px; line-height: 1.5; }
-
-.appsumo-steps { display: grid; gap: 0; margin: 8px 0 0; padding: 0; list-style: none; counter-reset: appsumo-step; }
-.appsumo-steps li { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 18px; padding-bottom: 28px; counter-increment: appsumo-step; }
-.appsumo-steps li::before { content: counter(appsumo-step); display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid color-mix(in srgb, var(--crrt-carrot) 55%, transparent); border-radius: 50%; color: var(--crrt-carrot); background: color-mix(in srgb, var(--crrt-carrot) 10%, transparent); font: 700 15px/1 var(--crrt-font-mono); }
-.appsumo-steps li:not(:last-child)::after { content: ''; position: absolute; top: 46px; bottom: 6px; left: 19.5px; width: 1px; background: var(--border); }
-.appsumo-steps h3 { margin: 8px 0 6px; color: var(--foreground); font: 600 17px/1.3 var(--crrt-font-body); }
-.appsumo-steps p { margin: 0; color: var(--crrt-ink-faint); font: 400 16px/1.6 var(--crrt-font-body); }
-.appsumo-steps strong { color: var(--foreground); font-weight: 600; }
-
-.appsumo-note { margin: 0 0 56px; padding: 20px 22px; border: 1px solid var(--border); border-left: 3px solid var(--crrt-carrot); border-radius: 12px; background: color-mix(in srgb, var(--card) 70%, transparent); }
-.appsumo-note h3 { margin: 0 0 10px; color: var(--foreground); font: 700 13px/1 var(--crrt-font-mono); letter-spacing: .04em; text-transform: uppercase; }
-.appsumo-note ul { display: grid; gap: 8px; margin: 0; padding-left: 18px; color: var(--crrt-ink-faint); font: 400 15px/1.55 var(--crrt-font-body); }
-.appsumo-note a { color: var(--foreground); text-decoration-color: var(--crrt-carrot); text-underline-offset: 4px; }
-
-@media (max-width: 520px) {
-  .appsumo-deal { padding: 22px; }
-  .appsumo-deal dd { font-size: 28px; }
 }
