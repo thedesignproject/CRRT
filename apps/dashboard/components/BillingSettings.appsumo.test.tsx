@@ -83,8 +83,11 @@ it('warns AppSumo users that an active Stripe subscription keeps charging', asyn
   expect(screen.getByRole('button', { name: 'Manage billing' })).toBeInTheDocument()
 })
 
-it('tells AppSumo users with a cancelled Stripe subscription when it ends, not that it keeps charging', async () => {
-  vi.mocked(getBillingSummary).mockResolvedValue({ ...redeemed, plan: 'studio', paidSubscriptionActive: true, cancelAtPeriodEnd: true, currentPeriodEnd: '2026-12-15T12:00:00Z', canManageSubscription: true })
+it.each([
+  { currentPeriodEnd: '2026-12-15T12:00:00Z' },
+  { periodEnd: '2026-12-15T12:00:00Z' },
+])('tells AppSumo users with a cancelled Stripe subscription when it ends, not that it keeps charging %#', async (period) => {
+  vi.mocked(getBillingSummary).mockResolvedValue({ ...redeemed, plan: 'studio', paidSubscriptionActive: true, cancelAtPeriodEnd: true, ...period, canManageSubscription: true })
   render(<BillingSettings {...props} />)
   expect(await screen.findByText(/^Your Stripe subscription ends .*2026\. AppSumo lifetime Pro continues after that\.$/)).toBeInTheDocument()
   expect(screen.queryByText(/keeps renewing/)).not.toBeInTheDocument()
