@@ -4590,8 +4590,14 @@ function includedProFunction(source: string, name: string, from: string, to: str
 
 export const includedProSql = [
   includedProFunction(legacyBillingSql, 'cloud_effective_account', 'IF b.is_legacy AND', 'IF b.included_pro IS NOT NULL AND'),
-  // Every row without Stripe history is a placeholder, including one an AppSumo refund leaves.
-  includedProFunction(legacyBillingSql, 'delete_unbilled_legacy_account', ' AND is_legacy\n', '\n'),
+  // Any row without Stripe history, including one an AppSumo refund leaves, must
+  // not block deleting the user. The early-user cleanup function can be owned by
+  // another role, so add a second trigger instead of replacing it.
+  includedProFunction(legacyBillingSql, 'delete_unbilled_legacy_account', ' AND is_legacy\n', '\n')
+    .replaceAll('delete_unbilled_legacy_account', 'delete_unbilled_account'),
+  `CREATE TRIGGER delete_unbilled_account BEFORE DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.delete_unbilled_account();`,
+  `REVOKE ALL ON FUNCTION public.delete_unbilled_account() FROM PUBLIC,anon,authenticated;`,
   includedProFunction(legacyBillingSql, 'create_approved_widget_agent_share', 'NOT coalesce(v_billing.is_legacy,false)', 'v_billing.included_pro IS NULL'),
   includedProFunction(recordSql, 'record_charge_payload', 'coalesce(billing.is_legacy,false)', 'billing.included_pro IS NOT NULL'),
   `DROP FUNCTION public.redeem_appsumo_code(uuid,text,integer);

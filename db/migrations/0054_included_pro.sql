@@ -28,7 +28,7 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION public.delete_unbilled_legacy_account() RETURNS trigger
+CREATE OR REPLACE FUNCTION public.delete_unbilled_account() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   DELETE FROM public.billing_accounts WHERE user_id=OLD.id
@@ -41,6 +41,11 @@ BEGIN
   RETURN OLD;
 END;
 $$;
+--> statement-breakpoint
+CREATE TRIGGER delete_unbilled_account BEFORE DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.delete_unbilled_account();
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.delete_unbilled_account() FROM PUBLIC,anon,authenticated;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION public.create_approved_widget_agent_share(
   p_project text,

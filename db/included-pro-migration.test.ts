@@ -30,6 +30,8 @@ it('grants included Pro from included_pro in every function that used is_legacy'
     'IF v_billing.included_pro IS NULL AND NOT coalesce(',
     'IF NOT FOUND OR NOT (billing.included_pro IS NOT NULL OR coalesce(',
   ]) expect(includedProSql).toContain(grant)
+  expect(includedProSql).toContain('CREATE TRIGGER delete_unbilled_account BEFORE DELETE ON auth.users')
+  expect(includedProSql).not.toContain('FUNCTION public.delete_unbilled_legacy_account')
   // is_legacy is still reported by cloud_entitlements, but never grants Pro.
   expect(includedProSql).not.toMatch(/NOT coalesce\(v_billing\.is_legacy|\(coalesce\(billing\.is_legacy|IF b\.is_legacy/)
 })
