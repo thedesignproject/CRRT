@@ -1,11 +1,37 @@
-import { CTAGroup } from '../../../src/design-system'
 import { DASHBOARD_HREF } from '../components/Navigation'
-import { H2, Ol, P, Section, Strong } from '../docs/Prose'
+import { H2, P, Section, Strong } from '../docs/Prose'
 import { LegalLayout, LegalLink } from './LegalLayout'
 
 // Signed-out buyers sign up or log in, then land on the redeem field in Billing.
 export const APPSUMO_REDEEM_HREF = `${DASHBOARD_HREF}/billing?appsumo=1`
 export const APPSUMO_SIGNUP_HREF = `${APPSUMO_REDEEM_HREF}&auth=signup`
+
+const LIMITS = [
+  ['10', 'projects'],
+  ['10', 'collaborators'],
+  ['2,000', 'comments a month'],
+  ['5', 'audits a month'],
+] as const
+
+function DealSummary() {
+  return (
+    <aside className="appsumo-deal" aria-labelledby="appsumo-deal-title">
+      <div className="appsumo-deal-head">
+        <h2 id="appsumo-deal-title">Cloud Pro</h2>
+        <span>Lifetime</span>
+      </div>
+      <dl>
+        {LIMITS.map(([value, label]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p>One code, one account. No card needed to redeem.</p>
+    </aside>
+  )
+}
 
 export function AppsumoPage() {
   return (
@@ -13,24 +39,46 @@ export function AppsumoPage() {
       marker="appsumo"
       title="Redeem your AppSumo deal"
       description="Your AppSumo code unlocks CRRT Cloud Pro for life: 10 projects, 10 collaborators, 2,000 comments and 5 audits every month."
+      actions={(
+        <>
+          <a className="ds-button ds-button-primary ds-button-lg" href={APPSUMO_SIGNUP_HREF}>Create account and redeem</a>
+          <a className="ds-button ds-button-secondary ds-button-lg" href={APPSUMO_REDEEM_HREF}>I have an account, log in</a>
+        </>
+      )}
+      aside={<DealSummary />}
     >
-      <CTAGroup>
-        <a className="ds-button ds-button-primary ds-button-lg" href={APPSUMO_SIGNUP_HREF}>Create account and redeem</a>
-        <a className="ds-button ds-button-secondary ds-button-lg" href={APPSUMO_REDEEM_HREF}>I have an account, log in</a>
-      </CTAGroup>
-
       <Section>
         <H2>How to redeem</H2>
-        <Ol>
-          <li>Create a CRRT account, or log in if you already have one.</li>
-          <li>You land on <Strong>Billing</Strong>. Paste your code into <Strong>Redeem AppSumo code</Strong> and choose <Strong>Redeem</Strong>.</li>
-          <li>Your plan changes to <Strong>AppSumo lifetime · Cloud Pro</Strong> right away.</li>
-        </Ol>
-        <P>
-          Each code works once, and each account can hold one code. Codes are case-sensitive, so paste them exactly as
-          AppSumo shows them. Already signed in? Go to Billing and find the code field under your plan.
-        </P>
+        <ol className="appsumo-steps" aria-label="Redeem steps">
+          <li>
+            <div>
+              <h3>Create your account</h3>
+              <p>Sign up for CRRT, or log in if you already have an account.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Paste your code</h3>
+              <p>You land on <strong>Billing</strong>. Paste your code into <strong>Redeem AppSumo code</strong> and choose <strong>Redeem</strong>.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>Start using Pro</h3>
+              <p>Your plan changes to <strong>AppSumo lifetime · Cloud Pro</strong> right away.</p>
+            </div>
+          </li>
+        </ol>
       </Section>
+
+      <aside className="appsumo-note" aria-labelledby="appsumo-note-title">
+        <h3 id="appsumo-note-title">Good to know</h3>
+        <ul>
+          <li>Each code works once, and each account can hold one code.</li>
+          <li>Codes are case-sensitive, so paste them exactly as AppSumo shows them.</li>
+          <li>Already signed in? <a href={APPSUMO_REDEEM_HREF}>Go to Billing</a> and find the code field under your plan.</li>
+        </ul>
+      </aside>
 
       <Section>
         <H2>Already paying with a card?</H2>
