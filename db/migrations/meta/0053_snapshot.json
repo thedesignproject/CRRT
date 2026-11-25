@@ -1,5 +1,5 @@
 {
-  "id": "34c7754d-6702-4113-987a-0753b0e320ad",
+  "id": "9b0a8768-9098-45f9-9d4c-3b0f0c38af12",
   "prevId": "5dec167f-5713-4f3b-b31a-99e7c81b0abb",
   "version": "7",
   "dialect": "postgresql",
@@ -1376,12 +1376,6 @@
           "notNull": true,
           "default": false
         },
-        "included_pro": {
-          "name": "included_pro",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "period_start": {
           "name": "period_start",
           "type": "timestamp with time zone",
@@ -1481,16 +1475,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "billing_accounts_included_pro": {
-          "name": "billing_accounts_included_pro",
-          "value": "\"billing_accounts\".\"included_pro\" in ('early_access','appsumo')"
-        },
-        "billing_accounts_legacy_included_pro": {
-          "name": "billing_accounts_legacy_included_pro",
-          "value": "not \"billing_accounts\".\"is_legacy\" or \"billing_accounts\".\"included_pro\" is not null"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.billing_webhook_events": {
