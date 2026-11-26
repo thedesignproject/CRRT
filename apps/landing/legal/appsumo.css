@@ -16,7 +16,7 @@
 .studio-header { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface-1) 88%, transparent); backdrop-filter: blur(12px); }
 .studio-header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 56px; }
 .studio-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text-strong) !important; font-weight: 600; font-size: 15px; letter-spacing: -.01em; text-decoration: none; }
-.studio-carrot { image-rendering: pixelated; flex-shrink: 0; }
+.studio-logo { flex-shrink: 0; border-radius: 50%; box-shadow: 0 0 0 1px var(--border); }
 .studio-nav { display: flex; align-items: center; gap: clamp(12px, 3vw, 24px); font-size: 13px; }
 .studio-nav > a:not(.studio-button) { color: var(--text-subtle); text-decoration: none; }
 .studio-nav > a:not(.studio-button):hover { color: var(--text-strong); }

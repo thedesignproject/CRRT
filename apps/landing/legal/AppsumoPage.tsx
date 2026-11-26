@@ -31,20 +31,6 @@ const LIMITS = [
   ['5', 'audits a month'],
 ] as const
 
-/** The pixel carrot from the Studio CarrotMark, coloured by the scoped tokens. */
-function CarrotMark({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 8 8" aria-hidden="true" className="studio-carrot">
-      <rect x="4" y="0" width="1" height="2" fill="var(--leaf)" />
-      <rect x="5" y="1" width="1" height="1" fill="var(--leaf)" />
-      <rect x="3" y="2" width="3" height="2" fill="var(--carrot)" />
-      <rect x="2" y="4" width="3" height="2" fill="var(--carrot)" />
-      <rect x="1" y="6" width="2" height="1" fill="var(--carrot)" />
-      <rect x="0" y="7" width="1" height="1" fill="var(--carrot)" />
-    </svg>
-  )
-}
-
 function DealCard() {
   return (
     <aside className="studio-card studio-deal" aria-labelledby="appsumo-deal-title">
@@ -97,7 +83,7 @@ export function AppsumoPage() {
       <header className="studio-header">
         <div className="studio-wrap studio-header-row">
           <a href="/" className="studio-brand" aria-label="CRRT home">
-            <CarrotMark />
+            <img src="/favicon.png" alt="" width={28} height={28} className="studio-logo" />
             <span>CRRT</span>
           </a>
           <nav aria-label="AppSumo page" className="studio-nav">
