@@ -504,6 +504,22 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByRole('status')).toHaveTextContent('1 selected item copied as a prompt.')
   })
 
+  it('names the remembered coding tool when handing off a bulk selection', async () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key: string) => key === 'crrt-dashboard-agent' ? 'codex' : null)
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com/a', selector: 'body', x: 10, y: 20,
+      body: 'Ship this change', reviewStatus: 'accepted', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Send to Codex' }))
+    await waitFor(() => expect(fixtures.getPrompt).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', 'share-1', 'codex'))
+    expect(await screen.findByRole('status')).toHaveTextContent('1 selected item copied for Codex.')
+  })
+
   it('sends an unpaid owner to checkout without dropping the selected feedback', async () => {
     fixtures.comments.push({
       id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com/a', selector: 'body', x: 10, y: 20,
