@@ -11,17 +11,17 @@ import { access } from './feedback.js'
 import { checked, ensure, hasScope, McpError, uuid, type McpIdentity } from './auth.js'
 import type { ToolSpec } from './transport.js'
 
-const key = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/).describe('Unique retry key; reuse only for the identical request. A UUID works.')
+export const key = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/).describe('Unique retry key; reuse only for the identical request. A UUID works.')
 const agentId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).describe('Unique stable identity for this agent/subagent in this work session.')
 const projectId = z.string().min(1).max(200)
-const summary = z.string().trim().min(1).max(2000)
-const workInput = { workId: uuid, agentId, promptVersion: z.literal('1').describe('Acknowledge the full implementationPrompt returned during preparation.') }
+export const summary = z.string().trim().min(1).max(2000)
+export const workInput = { workId: uuid, agentId, promptVersion: z.literal('1').describe('Acknowledge the full implementationPrompt returned during preparation.') }
 const prepareInput = z.object({ projectId, feedbackIds: z.array(uuid).min(1).max(20).refine(ids => new Set(ids).size === ids.length), idempotencyKey: key, promptVersion: z.literal('1') }).strict()
 const progressInput = z.object({ ...workInput, feedbackId: uuid, action: z.enum(['claim', 'start', 'note', 'block', 'complete']), summary, idempotencyKey: key }).strict()
 const presenceInput = z.object({ ...workInput, status: z.enum(['reading', 'idle', 'working', 'blocked']), summary }).strict()
 const statusInput = z.object({ projectId, feedbackId: uuid, status: z.enum(['ready_for_agent', 'open', 'rejected', 'ready_for_testing', 'done']), expectedUpdatedAt: z.iso.datetime({ offset: true }), userRequested: z.literal(true).describe('Only set when the human explicitly requested this status change.'), reason: z.string().trim().min(1).max(1000) }).strict()
 const operationOutput = z.object({ outcome: z.enum(['applied', 'duplicate']), projectId: z.string(), feedbackId: uuid.optional(), implementationStatus: z.string().optional() }).strict()
-const failures = new Set(['insufficient_scope', 'forbidden', 'work_unavailable', 'feedback_not_eligible', 'feedback_not_found', 'idempotency_conflict', 'claim_required', 'claimed_conflict', 'reviewer_owned', 'status_conflict', 'github_issue_creation_in_progress'])
+const failures = new Set(['insufficient_scope', 'forbidden', 'work_unavailable', 'feedback_not_eligible', 'feedback_not_found', 'idempotency_conflict', 'claim_required', 'claimed_conflict', 'reviewer_owned', 'status_conflict', 'github_issue_creation_in_progress', 'repository_changed', 'feedback_changed', 'sender_removed', 'listener_stopped', 'dispatch_completed'])
 async function rpc(name: string, args: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await getServiceSupabase().rpc(name, args)
   if (error) {
@@ -30,13 +30,13 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<unknown
   }
   return data
 }
-async function permission(actor: McpIdentity, project: string, scope: 'crrt:implement' | 'crrt:review') {
+export async function permission(actor: McpIdentity, project: string, scope: 'crrt:implement' | 'crrt:review') {
   ensure(hasScope(actor, scope), 403, 'insufficient_scope')
   const role = await access(actor, project)
   ensure(canProject(role, scope === 'crrt:implement' ? 'agent:operate' : 'feedback:manage'), 403, 'forbidden')
   if (scope === 'crrt:implement') ensure((await resolveWidgetAgentAccess(project, actor.user_id)).state === 'ready', 403, 'agent_access_required')
 }
-async function workProject(actor: McpIdentity, workId: string) {
+export async function workProject(actor: McpIdentity, workId: string) {
   ensure(hasScope(actor, 'crrt:implement'), 403, 'insufficient_scope')
   const row = await checked(await getServiceSupabase().from('mcp_workflows').select('feedback_shares!inner(project_id)').eq('share_id', workId).eq('connection_id', actor.connection_id).maybeSingle())
   ensure(row, 404, 'work_unavailable')

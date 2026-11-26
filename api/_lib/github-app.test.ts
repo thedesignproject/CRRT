@@ -11,6 +11,7 @@ import {
   createGitHubAppSetupAuthState,
   createGitHubAppJwt,
   createInstallationAccessToken,
+  isGitHubInstallationActive,
   listUserInstallationRepositories,
   verifyGitHubAppInstallationToken,
   verifyGitHubAppInstallState,
@@ -256,6 +257,27 @@ describe('github app install helpers', () => {
 
     globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
     await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
+  })
+
+  it('reports a removed or suspended installation and never mistakes transient errors for one', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ id: 99, suspended_at: null }), { status: 200 }))
+    globalThis.fetch = fetch as never
+    await expect(isGitHubInstallationActive('9/9')).resolves.toBe(true)
+    expect(fetch).toHaveBeenCalledWith('https://api.github.com/app/installations/9%2F9', {
+      headers: { Accept: 'application/vnd.github+json', Authorization: expect.stringMatching(/^Bearer .+\..+\..+$/) },
+    })
+
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ suspended_at: '2026-01-01T00:00:00Z' }), { status: 200 })) as never
+    await expect(isGitHubInstallationActive('99')).resolves.toBe(false)
+
+    globalThis.fetch = vi.fn(async () => new Response('{"message":"Not Found"}', { status: 404 })) as never
+    await expect(isGitHubInstallationActive('99')).resolves.toBe(false)
+
+    globalThis.fetch = vi.fn(async () => new Response('{}', { status: 502 })) as never
+    await expect(isGitHubInstallationActive('99')).rejects.toThrow('github_installation_lookup_failed')
+
+    globalThis.fetch = vi.fn(async () => { throw new Error('network down') }) as never
+    await expect(isGitHubInstallationActive('99')).rejects.toThrow('github_installation_lookup_failed')
   })
 
   it('verifies repository access with a short-lived installation token', async () => {

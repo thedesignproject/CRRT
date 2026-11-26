@@ -4,6 +4,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createDefaultCommentIssueContent } from '../../../_lib/comment-issue-content.js'
+import { isGitHubInstallationActive } from '../../../_lib/github-app.js'
 import { formatGithubIssueBody } from '../../../_lib/github-issues.js'
 import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
 import { createJiraIssue, getJiraDestinations } from '../../../_lib/jira.js'
@@ -173,11 +174,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const connection = await getGithubIssueConnection(publicComment.projectId)
     const current = await getCommentForGithubIssue(publicComment.projectId, commentId, user.userId)
     if (!current) return jsonError(req, res, 404, 'Comment not found')
+    // Only GitHub saying the installation is gone counts as revoked; a failed check keeps the saved connection.
+    const revoked = connection ? !(await isGitHubInstallationActive(connection.installationId).catch(() => true)) : false
     const currentContent = createDefaultCommentIssueContent(current)
     setCors(req, res, METHODS)
     return res.status(200).json({
       provider: 'github',
-      connected: Boolean(connection),
+      connected: Boolean(connection) && !revoked,
+      ...(revoked ? { reason: 'installation_revoked' } : {}),
       destination: connection ? `${connection.owner}/${connection.repo}` : null,
       existing: current.githubIssue ?? null,
       draft: {

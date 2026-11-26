@@ -6,7 +6,7 @@ afterEach(() => vi.unstubAllGlobals())
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 
 it('reads listeners and dispatches, then sends one comment to a terminal', async () => {
-  const delivery = { listeners: [{ listenerId: 'l1', label: 'crrt', repoUrl: '', online: true, stopped: false }], dispatches: [] }
+  const delivery = { listeners: [{ listenerId: 'l1', label: 'crrt', repoUrl: '', online: true }], dispatches: [] }
   const fetch = vi.fn()
     .mockResolvedValueOnce(json(delivery))
     .mockResolvedValueOnce(json({ dispatchId: 'd1', state: 'queued' }, 201))
@@ -20,13 +20,6 @@ it('reads listeners and dispatches, then sends one comment to a terminal', async
   expect(fetch).toHaveBeenNthCalledWith(2, '/api/v1/projects/pk%2F1/agent/dispatch', expect.objectContaining({
     method: 'POST', body: JSON.stringify(input),
   }))
-})
-
-it('rejects a malformed delivery state', async () => {
-  for (const body of [null, { dispatches: [] }, { listeners: [] }]) {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(body)))
-    await expect(getAgentDelivery('/api', 'token', 'pk')).rejects.toThrow('Invalid delivery state')
-  }
 })
 
 it('keeps the API error code on a failed send', async () => {

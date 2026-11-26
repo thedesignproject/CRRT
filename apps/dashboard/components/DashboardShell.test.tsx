@@ -4,6 +4,8 @@ import type { ComponentProps } from 'react'
 
 const quota = vi.hoisted(() => ({ value: null as null | { plan: string; used: number; limit: number; canUpgrade: boolean } }))
 vi.mock('../hooks/usePlanQuota', () => ({ usePlanQuota: () => quota.value }))
+const workspace = vi.hoisted(() => ({ name: null as string | null, rename: vi.fn() }))
+vi.mock('../hooks/useWorkspace', () => ({ useWorkspace: () => workspace }))
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
 const menu = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }))
 vi.mock('./UserMenu', () => ({ UserMenu: (p: Record<string, unknown>) => { menu.props = p; return null } }))
@@ -16,7 +18,7 @@ type Props = ComponentProps<typeof DashboardShell>
 const props: Props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, onNewProject: fn, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark', toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn, children: <p>View content</p> }
 const shell = (overrides: Partial<Props> = {}) => <DashboardShell {...props} {...overrides} />
 
-beforeEach(() => { fn.mockClear(); quota.value = null; menu.props = null })
+beforeEach(() => { fn.mockClear(); quota.value = null; menu.props = null; workspace.name = null })
 
 describe('DashboardShell', () => {
   it('keeps the top bar to search, the primary action and the account menu', () => {
@@ -58,6 +60,24 @@ describe('DashboardShell', () => {
     expect(screen.getByRole('button', { name: 'Project One' })).toHaveTextContent(/^Project One$/)
     view.rerender(shell({ projects: [project], selectedProject: 'one', commentCount: 0 }))
     expect(screen.getByRole('button', { name: 'Project One' })).toHaveTextContent(/^Project One$/)
+  })
+
+  it('names the workspace and lets the account menu rename it', () => {
+    const view = render(shell())
+    expect(within(screen.getByRole('navigation', { name: 'Workspace' })).getByText('CRRT')).toBeInTheDocument()
+    workspace.name = 'Acme Studio'
+    view.rerender(shell({ theme: 'light' }))
+    expect(within(screen.getByRole('navigation', { name: 'Workspace' })).getByText('Acme Studio')).toBeInTheDocument()
+    expect(menu.props).toMatchObject({ workspace: { name: 'Acme Studio', onRename: workspace.rename } })
+  })
+
+  it('shows each project\'s open count and live agent from the server', () => {
+    const other = { ...project, publicKey: 'two', name: 'Project Two' }
+    render(shell({ projects: [{ ...project, openCount: 4, agentLive: true }, { ...other, openCount: 0 }], selectedProject: 'two', commentCount: 3 }))
+    const one = screen.getByRole('button', { name: /Project One/ })
+    expect(one).toHaveTextContent('4')
+    expect(within(one).getByText('Agent working')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Project Two' })).toHaveTextContent(/^Project Two$/)
   })
 
   it('highlights Inbox instead of the project and disables project search there', () => {

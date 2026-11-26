@@ -43,6 +43,22 @@ import {
   slugifyProjectKey,
   suggestAvailableProjectKey,
   applyAgentFeedbackOperation,
+  getWorkspaceName,
+  listProjectActivity,
+  deleteOwnedProject,
+  listAgentRuns,
+  setWorkspaceName,
+  createBrainRule,
+  deleteBrainRule,
+  getBrainRuleScope,
+  listBrainRulesFor,
+  listRulesForUser,
+  updateBrainRule,
+  answerNextStepConflict,
+  citeNextStepRules,
+  getNextStep,
+  listNextSteps,
+  pauseNextStep,
 } from './store.js'
 
 type ProjectRow = {
@@ -1337,4 +1353,203 @@ it('applies feedback keyset pagination and explicit selection at the database bo
   expect(calls).toContainEqual(['or', 'created_at.lt.2026-01-01T00:00:00Z,and(created_at.eq.2026-01-01T00:00:00Z,id.lt.id)'])
   expect(calls).toContainEqual(['order', 'id', { ascending: false }])
   expect(calls).toContainEqual(['limit', 21])
+})
+
+describe('project activity and workspace name', () => {
+  it('deletes an owned project through one RPC and passes its status back', async () => {
+    const rpc = vi.fn(async () => ({ data: 'forbidden', error: null }))
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+    expect(await deleteOwnedProject('p', 'u')).toBe('forbidden')
+    expect(rpc).toHaveBeenCalledWith('delete_owned_project', { p_project: 'p', p_actor: 'u' })
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'tracker_dispatch_in_progress' } } as never)
+    await expect(deleteOwnedProject('p', 'u')).rejects.toThrow('tracker_dispatch_in_progress')
+  })
+
+  it('maps project activity rows by project and asks for agents seen in the last 90 seconds', async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:01:30Z') })
+    const rpc = vi.fn(async () => ({ data: [{ project_key: 'p', open_count: 2, agent_live: true }], error: null }))
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+    expect(await listProjectActivity('u')).toEqual(new Map([['p', { openCount: 2, agentLive: true }]]))
+    expect(rpc).toHaveBeenCalledWith('project_activity', { p_actor: 'u', p_live_since: '2026-01-01T00:00:00.000Z' })
+    vi.useRealTimers()
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'rpc boom' } } as never)
+    await expect(listProjectActivity('u')).rejects.toThrow('rpc boom')
+  })
+
+  it('maps agent runs with every outcome and labels MCP agents by their own id', async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:01:30Z') })
+    const outcomes = ['running', 'completed', 'blocked', 'stopped'] as const
+    const rows = outcomes.map((outcome, n) => ({ share_id: 's', project_key: 'p', agent_id: n ? `agent-${n}` : 'mcp:w:claude', started_at: 'a', ended_at: 'b', steps: n, comments_completed: 1, outcome }))
+    const rpc = vi.fn(async () => ({ data: rows, error: null }))
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+    const runs = await listAgentRuns(['p', 'q'], 50)
+    expect(rpc).toHaveBeenCalledWith('agent_runs', { p_projects: ['p', 'q'], p_live_since: '2026-01-01T00:00:00.000Z', p_limit: 50 })
+    vi.useRealTimers()
+    expect(runs.map((run) => run.outcome)).toEqual([...outcomes])
+    expect(runs[0]).toEqual({ id: 's:mcp:w:claude', projectKey: 'p', agentLabel: 'claude', startedAt: 'a', endedAt: 'b', steps: 0, commentsCompleted: 1, outcome: 'running' })
+    expect(runs[1]).toMatchObject({ id: 's:agent-1', agentLabel: 'agent-1' })
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'runs boom' } } as never)
+    await expect(listAgentRuns([], 1)).rejects.toThrow('runs boom')
+  })
+
+  it('reads the workspace name, or null when none is saved', async () => {
+    const maybeSingle = vi.fn()
+    const eq = vi.fn(() => ({ maybeSingle }))
+    const select = vi.fn(() => ({ eq }))
+    const from = vi.fn(() => ({ select }))
+    vi.mocked(getServiceSupabase).mockReturnValue({ from } as never)
+    maybeSingle.mockResolvedValueOnce({ data: { name: 'Acme' }, error: null })
+    expect(await getWorkspaceName('u')).toBe('Acme')
+    expect(from).toHaveBeenCalledWith('workspaces')
+    expect(eq).toHaveBeenCalledWith('user_id', 'u')
+    maybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    expect(await getWorkspaceName('u')).toBeNull()
+    maybeSingle.mockResolvedValueOnce({ data: null, error: { message: 'read boom' } })
+    await expect(getWorkspaceName('u')).rejects.toThrow('read boom')
+  })
+
+  it('upserts the workspace name for the user', async () => {
+    const upsert = vi.fn()
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => ({ upsert })) } as never)
+    upsert.mockResolvedValueOnce({ error: null })
+    await setWorkspaceName('u', 'Acme')
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u', name: 'Acme' }))
+    upsert.mockResolvedValueOnce({ error: { message: 'write boom' } })
+    await expect(setWorkspaceName('u', 'Acme')).rejects.toThrow('write boom')
+  })
+})
+
+describe('brain rules', () => {
+  const row = { id: 'r', project_key: 'p', title: 'T', body: 'B', author_user_id: 'u', created_at: 'c', updated_at: 'd' }
+  const rule = { id: 'r', title: 'T', body: 'B', projectKey: 'p', authorUserId: 'u', createdAt: 'c', updatedAt: 'd' }
+  // A query builder that records filters and resolves to the next queued result.
+  function builder(...results: Array<{ data?: unknown; count?: number | null; error: { message: string } | null }>) {
+    const calls: unknown[][] = []
+    const query: Record<string, unknown> = {
+      then: (resolve: (value: unknown) => unknown) => resolve(results.shift()),
+    }
+    for (const method of ['select', 'eq', 'neq', 'is', 'in', 'order', 'insert', 'update', 'upsert', 'delete']) query[method] = (...args: unknown[]) => { calls.push([method, ...args]); return query }
+    for (const method of ['single', 'maybeSingle']) query[method] = async (...args: unknown[]) => { calls.push([method, ...args]); return results.shift() }
+    return { query, calls }
+  }
+
+  it('lists rules applying to readable projects, narrowed to a project or a rule', async () => {
+    const { query, calls } = builder({ data: [row], error: null }, { data: [], error: null }, { data: null, error: { message: 'rpc boom' } })
+    const rpc = vi.fn(() => query)
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+    expect(await listBrainRulesFor('u', 'p')).toEqual([rule])
+    expect(rpc).toHaveBeenCalledWith('brain_rules_for', { p_actor: 'u', p_project_key: 'p' })
+    expect(calls.some(([method]) => method === 'eq')).toBe(false)
+    expect(await listBrainRulesFor('u', null, 'r')).toEqual([])
+    expect(calls).toContainEqual(['eq', 'id', 'r'])
+    await expect(listBrainRulesFor('u', null)).rejects.toThrow('rpc boom')
+  })
+
+  it('lists the user\'s workspace rules then readable project rules, with their citation counts', async () => {
+    const own = { ...row, id: 'w', project_key: null }
+    const table = builder(
+      { data: [own], error: null }, { data: [{ rule_id: 'w' }, { rule_id: 'w' }], error: null },
+      { data: [own], error: null }, { error: { message: 'count boom' } },
+      { data: null, error: { message: 'read boom' } },
+    )
+    // The member's project follows another owner's workspace rule 'x': listed, but not theirs.
+    const rpc = builder({ data: [own, row, { ...row, id: 'x', project_key: null }], error: null }, { data: [], error: null }, { data: [], error: null })
+    const from = vi.fn(() => table.query)
+    vi.mocked(getServiceSupabase).mockReturnValue({ from, rpc: vi.fn(() => rpc.query) } as never)
+    expect(await listRulesForUser('u')).toEqual([
+      { ...rule, id: 'w', projectKey: null, mine: true, citations: 2 },
+      { ...rule, mine: false, citations: 0 },
+      { ...rule, id: 'x', projectKey: null, mine: false, citations: 0 },
+    ])
+    expect(table.calls).toEqual(expect.arrayContaining([['eq', 'owner_user_id', 'u'], ['is', 'project_key', null], ['in', 'rule_id', ['w', 'r', 'x']]]))
+    expect(from).toHaveBeenCalledWith('next_step_rule_citations')
+    await expect(listRulesForUser('u')).rejects.toThrow('count boom')
+    await expect(listRulesForUser('u')).rejects.toThrow('read boom')
+  })
+
+  it('reads a rule\'s owner and project, or null', async () => {
+    const { query } = builder({ data: { owner_user_id: 'o', project_key: null }, error: null }, { data: null, error: null }, { data: null, error: { message: 'boom' } })
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => query) } as never)
+    expect(await getBrainRuleScope('r')).toEqual({ ownerUserId: 'o', projectKey: null })
+    expect(await getBrainRuleScope('r')).toBeNull()
+    await expect(getBrainRuleScope('r')).rejects.toThrow('boom')
+  })
+
+  it('creates workspace rules for the author and project rules for the project owner', async () => {
+    const { query, calls } = builder(
+      { data: row, error: null },
+      { data: { user_id: 'owner' }, error: null }, { data: row, error: null },
+      { data: null, error: { message: 'no owner' } },
+      { data: null, error: { message: 'insert boom' } },
+    )
+    const from = vi.fn(() => query)
+    vi.mocked(getServiceSupabase).mockReturnValue({ from } as never)
+    expect(await createBrainRule('u', null, 'T', 'B')).toEqual(rule)
+    expect(calls).toContainEqual(['insert', { owner_user_id: 'u', project_key: null, title: 'T', body: 'B', author_user_id: 'u' }])
+    expect(await createBrainRule('u', 'p', 'T', 'B')).toEqual(rule)
+    expect(calls).toContainEqual(['eq', 'is_owner', true])
+    expect(calls).toContainEqual(['insert', { owner_user_id: 'owner', project_key: 'p', title: 'T', body: 'B', author_user_id: 'u' }])
+    await expect(createBrainRule('u', 'p', 'T', 'B')).rejects.toThrow('no owner')
+    await expect(createBrainRule('u', null, 'T', 'B')).rejects.toThrow('insert boom')
+  })
+
+  it('updates and deletes a rule by id', async () => {
+    const { query, calls } = builder({ data: row, error: null }, { data: null, error: { message: 'update boom' } }, { error: null }, { error: { message: 'delete boom' } })
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => query) } as never)
+    expect(await updateBrainRule('r', { title: 'T' })).toEqual(rule)
+    expect(calls).toContainEqual(['update', expect.objectContaining({ title: 'T', updated_at: expect.any(String) })])
+    await expect(updateBrainRule('r', {})).rejects.toThrow('update boom')
+    await deleteBrainRule('r')
+    expect(calls).toContainEqual(['eq', 'id', 'r'])
+    await expect(deleteBrainRule('r')).rejects.toThrow('delete boom')
+  })
+
+  it('syncs and lists a project\'s next steps', async () => {
+    const step = { id: 's', title: 'T', tag: '/', status: 'open', createdAt: 'c', comments: [], requesters: [], citations: [], conflict: null }
+    const { query } = builder({ data: [step], error: null }, { data: null, error: { message: 'sync boom' } })
+    const rpc = vi.fn(() => query)
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+    expect(await listNextSteps('p')).toEqual([step])
+    expect(rpc).toHaveBeenCalledWith('sync_next_steps', { p_project: 'p' })
+    await expect(listNextSteps('p')).rejects.toThrow('sync boom')
+  })
+
+  it('reads a step with its comments not yet completed, or null', async () => {
+    const links = ['unassigned', 'claimed', 'ready_for_testing', 'done', null].map((status, n) => ({ comment_id: `c${n}`, comments: { implementation_status: status } }))
+    const { query, calls } = builder({ data: { project_key: 'p', status: 'open', next_step_comments: links }, error: null }, { data: null, error: null }, { data: null, error: { message: 'read boom' } })
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => query) } as never)
+    expect(await getNextStep('s')).toEqual({ projectKey: 'p', status: 'open', incompleteCommentIds: ['c0', 'c1', 'c4'] })
+    expect(calls).toContainEqual(['eq', 'id', 's'])
+    expect(await getNextStep('s')).toBeNull()
+    await expect(getNextStep('s')).rejects.toThrow('read boom')
+  })
+
+  it('pauses a step that is not done and answers a paused one', async () => {
+    const { query, calls } = builder(
+      { data: { id: 's' }, error: null }, { data: null, error: null }, { error: { message: 'pause boom' } },
+      { data: { id: 's' }, error: null }, { data: null, error: null }, { error: { message: 'answer boom' } },
+    )
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => query) } as never)
+    expect(await pauseNextStep('s', 'r', 'Q?')).toBe(true)
+    expect(calls).toContainEqual(['update', expect.objectContaining({ status: 'paused', conflict_rule_id: 'r', conflict_question: 'Q?', conflict_decision: null })])
+    expect(calls).toContainEqual(['neq', 'status', 'done'])
+    expect(await pauseNextStep('s', 'r', 'Q?')).toBe(false)
+    await expect(pauseNextStep('s', 'r', 'Q?')).rejects.toThrow('pause boom')
+    expect(await answerNextStepConflict('s', 'keep_rule')).toBe(true)
+    expect(calls).toContainEqual(['update', expect.objectContaining({ status: 'open', conflict_decision: 'keep_rule' })])
+    expect(calls).toContainEqual(['eq', 'status', 'paused'])
+    expect(await answerNextStepConflict('s', 'update_rule')).toBe(false)
+    await expect(answerNextStepConflict('s', 'keep_rule')).rejects.toThrow('answer boom')
+  })
+
+  it('records rule citations once per step and rule', async () => {
+    const { query, calls } = builder({ error: null }, { error: { message: 'cite boom' } })
+    const from = vi.fn(() => query)
+    vi.mocked(getServiceSupabase).mockReturnValue({ from } as never)
+    await citeNextStepRules('s', [], 'a')
+    expect(from).not.toHaveBeenCalled()
+    await citeNextStepRules('s', ['r'], 'a')
+    expect(calls).toContainEqual(['upsert', [{ next_step_id: 's', rule_id: 'r', agent_id: 'a' }], { onConflict: 'next_step_id,rule_id', ignoreDuplicates: true }])
+    await expect(citeNextStepRules('s', ['r'], 'a')).rejects.toThrow('cite boom')
+  })
 })

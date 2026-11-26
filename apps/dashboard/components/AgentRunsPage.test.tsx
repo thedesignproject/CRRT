@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
-import type { ShareEventsResponse } from '../api'
+import type { AgentRun, ShareEventsResponse } from '../api'
 import type { Comment, ImplStatus } from '../lib/types'
 import { AgentRunsPage } from './AgentRunsPage'
 
@@ -20,6 +20,7 @@ function page(over: Partial<Parameters<typeof AgentRunsPage>[0]> = {}) {
     events: Array.from({ length: 10 }, (_, i) => event(i + 1, i === 9 ? 'comment.started' : 'comment.claimed', i === 0 ? 'bad' : undefined)),
     agentError: null, agentErrorCode: null, selectedCommentId: '',
     onUpgrade: vi.fn(), onOpenComment: vi.fn(), onOpenNextSteps: vi.fn(),
+    pastRuns: { runs: [] as AgentRun[] | null, error: null as string | null },
     ...over,
   }
   return { props, ui: <AgentRunsPage {...props} /> }
@@ -55,4 +56,37 @@ it('points to Next steps when no agent is connected and surfaces errors', () => 
   view.rerender(page({ agentError: 'No seat', agentErrorCode: 'seat_limit_reached' }).ui)
   expect(screen.getByText('No Agent seats are available for this project.')).toBeInTheDocument()
   expect(screen.queryByRole('region', { name: /run$/ })).toBeNull()
+})
+
+const run = (over: Partial<AgentRun>): AgentRun => ({
+  id: 's:codex', projectKey: 'p', agentLabel: 'codex',
+  startedAt: new Date(Date.now() - 3 * 3_600_000).toISOString(), endedAt: new Date(Date.now() - 3 * 3_600_000 + 12 * 60_000).toISOString(),
+  steps: 5, commentsCompleted: 2, outcome: 'completed', ...over,
+})
+
+it('lists past runs under the live view with their outcome, time and work', () => {
+  render(page({ connected: false, pastRuns: { runs: [
+    run({ id: 'a', agentLabel: 'codex', outcome: 'running', steps: 1 }),
+    run({ id: 'b', agentLabel: 'claude-code', outcome: 'blocked', endedAt: run({}).startedAt }),
+    run({ id: 'c', outcome: 'stopped' }),
+    run({ id: 'd', outcome: 'completed' }),
+  ], error: null } }).ui)
+  const items = within(screen.getByRole('list', { name: 'Past runs' })).getAllByRole('listitem')
+  expect(items.map((li) => li.textContent)).toEqual([
+    'codexRunning3h ago · 12 min · 1 step · 2 completed',
+    'claude-codeBlocked3h ago · 1 min · 5 steps · 2 completed',
+    'codexStopped3h ago · 12 min · 5 steps · 2 completed',
+    'codexCompleted3h ago · 12 min · 5 steps · 2 completed',
+  ])
+  expect(screen.getByText('No agent running')).toBeInTheDocument()
+  expect(screen.queryByText(/Past runs aren't kept/)).toBeNull()
+})
+
+it('says when past runs load, fail or are empty', () => {
+  const view = render(page({ pastRuns: { runs: null, error: null } }).ui)
+  expect(screen.getByRole('status')).toHaveTextContent('Loading past runs…')
+  view.rerender(page({ pastRuns: { runs: null, error: 'Offline' } }).ui)
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load past runs: Offline')
+  view.rerender(page().ui)
+  expect(screen.getByText('No agent has run in Acme yet.')).toBeInTheDocument()
 })

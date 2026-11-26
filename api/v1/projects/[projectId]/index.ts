@@ -2,7 +2,7 @@ import { protectProjectScreenshots } from '../../../_lib/private-project.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../_lib/auth.js'
 import { normalizeAllowedDomain } from '../../../_lib/origins.js'
-import { getProjectMember, updateProject } from '../../../_lib/store.js'
+import { deleteOwnedProject, getProjectMember, updateProject } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const MAX_ALLOWED_ORIGINS = 50
@@ -21,15 +21,36 @@ function parseAllowedOrigins(value: unknown): { domains: string[] } | { error: s
   return { domains: [...domains] }
 }
 
+const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
+
+// Owner only. Removes the project with its feedback, members, invites, shares,
+// integrations and Storybook connections in one transaction.
+async function deleteProject(req: VercelRequest, res: VercelResponse, projectKey: string, userId: string) {
+  try {
+    const status = await deleteOwnedProject(projectKey, userId)
+    if (status === 'not_found') return jsonError(req, res, 404, 'Project not found')
+    if (status === 'forbidden') return jsonError(req, res, 403, 'Only the project owner can delete it')
+    setCors(req, res, METHODS)
+    return res.status(204).end()
+  } catch (error) {
+    const code = error instanceof Error ? error.message : ''
+    if (code === 'tracker_dispatch_in_progress') return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before deleting the project.', error)
+    if (code === 'feedback_delivery_in_progress' || code === 'project_membership_busy') return jsonError(req, res, 409, 'The project is busy. Try deleting it again shortly.', error)
+    console.error(error)
+    return jsonError(req, res, 500, 'Internal server error', error)
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (handleOptions(req, res, ['PATCH', 'OPTIONS'])) return
-  if (req.method !== 'PATCH') return methodNotAllowed(req, res, ['PATCH', 'OPTIONS'])
+  if (handleOptions(req, res, METHODS)) return
+  if (req.method !== 'PATCH' && req.method !== 'DELETE') return methodNotAllowed(req, res, METHODS)
   const user = await requireUser(req, res)
   if (!user) return
 
   // `projectId` is the project public_key (see sibling invites.ts note).
   const projectKey = getStringQuery(req.query.projectId)
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
+  if (req.method === 'DELETE') return deleteProject(req, res, projectKey, user.userId)
 
   const body = (req.body ?? {}) as { name?: unknown; allowedOrigins?: unknown; widgetPrivate?: unknown; feedbackAccess?: unknown }
   const patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' } = {}

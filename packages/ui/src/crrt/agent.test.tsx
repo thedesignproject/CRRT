@@ -48,6 +48,14 @@ describe("NextStepRow", () => {
     view.rerender(<ul><NextStepRow step={{ ...step, status: "Queued" }} /></ul>);
     expect(screen.getByText("· Queued").className).toBe("");
   });
+
+  it("shows the tag, the rules it follows and extra content", () => {
+    render(<ul><NextStepRow step={{ ...step, tag: "copy", rules: ["Short headlines", "Plain words"] }}><p>Paused</p></NextStepRow></ul>);
+    expect(screen.getByText("copy")).toBeTruthy();
+    expect(screen.getByText("· Follows: Short headlines")).toBeTruthy();
+    expect(screen.getByText("· Follows: Plain words")).toBeTruthy();
+    expect(screen.getByText("Paused")).toBeTruthy();
+  });
 });
 
 describe("AgentRunCard", () => {

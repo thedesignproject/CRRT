@@ -55,6 +55,12 @@ export function agentActionLabel(agent: AgentMeta) {
   return agent.id === PROMPT_AGENT_ID ? agent.name : `Send to ${agent.name}`
 }
 
+/** The agent as named in a sentence: "Codex", or "your agent" for the plain prompt, which names no agent. */
+export function agentNoun(agent: AgentMeta, sentenceStart = false) {
+  if (agent.id !== PROMPT_AGENT_ID) return agent.name
+  return sentenceStart ? 'Your agent' : 'your agent'
+}
+
 export const AUTHOR_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9']
 
 export const DISPLAY_STATUS_LABELS: Record<DisplayStatus, string> = {

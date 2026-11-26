@@ -22,26 +22,12 @@ async function claim() {
   return { hook, project: project! }
 }
 
-it('takes owner role and capabilities for a new project from the server list', async () => {
-  const listed = { ...claimed, role: 'owner', capabilities: ['project:manage'] } as Project
-  vi.mocked(listProjects).mockResolvedValueOnce([]).mockResolvedValueOnce([listed])
+it('shows a claimed project with the owner role and capabilities the claim returned', async () => {
+  const owned = { ...claimed, role: 'owner', capabilities: ['project:manage'] } as Project
+  vi.mocked(claimProject).mockResolvedValue(owned)
   const { hook, project } = await claim()
-  expect(project).toEqual(listed)
-  expect(hook.result.current.projects).toEqual([listed])
-})
-
-it.each([
-  ['the list fails', () => vi.mocked(listProjects).mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('offline'))],
-  ['the list is not caught up yet', () => vi.mocked(listProjects).mockResolvedValue([])],
-])('treats the person who claimed a project as its owner when %s', async (_case, arrange) => {
-  arrange()
-  const { hook, project } = await claim()
+  expect(claimProject).toHaveBeenCalledWith('/api', 'token', 'new', 'New')
   expect(project.role).toBe('owner')
-  expect(hook.result.current.projects).toEqual([{ ...claimed, role: 'owner' }])
-})
-
-it('keeps a role the claim already returned', async () => {
-  vi.mocked(claimProject).mockResolvedValue({ ...claimed, role: 'admin' } as Project)
-  const { project } = await claim()
-  expect(project.role).toBe('admin')
+  expect(hook.result.current.projects).toEqual([owned])
+  expect(listProjects).toHaveBeenCalledOnce()
 })

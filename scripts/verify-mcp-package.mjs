@@ -50,7 +50,9 @@ try {
   await client.connect(new StreamableHTTPClientTransport(new URL(resource),{fetch:invoke,requestInit:{headers:{authorization:`Bearer ${tokens.access_token}`}}}))
   const tools=await client.listTools()
   const expectedTools = [
+    'start_feedback_listener', 'list_feedback_listeners', 'wait_for_feedback', 'stop_feedback_listener',
     'list_projects', 'list_feedback', 'get_feedback', 'get_handoff_context',
+    'list_rules', 'get_rule', 'list_next_steps', 'complete_next_step', 'report_rule_conflict',
     'prepare_feedback_work', 'report_agent_presence', 'update_feedback_progress', 'set_feedback_status',
     'connection_status', 'request_dashboard_access', 'manage_mcp_connections',
     'list_documents', 'get_document', 'get_document_history', 'get_document_revision',

@@ -93,6 +93,14 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "CRRT home" })).toBeTruthy();
   });
 
+  it.each([undefined, "/"])("names the workspace in place of CRRT (home %s)", (homeHref) => {
+    const { rerender } = render(<AppShell workspace="Acme Studio" nav={nav} activeId="inbox" homeHref={homeHref}><p>Body</p></AppShell>);
+    expect(screen.getByText("Acme Studio")).toBeTruthy();
+    expect(screen.queryByText("CRRT")).toBeNull();
+    rerender(<AppShell workspace={null} nav={nav} activeId="inbox" homeHref={homeHref}><p>Body</p></AppShell>);
+    expect(screen.getByText("CRRT")).toBeTruthy();
+  });
+
   it("renders without projects, footer or new-project button", () => {
     render(
       <AppShell workspace="Acme" nav={nav} activeId="inbox">

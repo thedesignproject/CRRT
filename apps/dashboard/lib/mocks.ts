@@ -1,4 +1,4 @@
-import type { AdminPage, AdminProject, AdminProjectSort, AdminStats, AdminUser, CommentRecord, Project } from '../api'
+import type { AdminPage, AdminProject, AdminProjectSort, AdminStats, AdminUser, AgentRun, BrainRule, CommentRecord, NextStepRecord, Project } from '../api'
 
 // VITE_USE_MOCKS:
 //   '1'     → populated fixtures (default mock mode)
@@ -21,6 +21,8 @@ export const MOCK_PROJECTS: Project[] = [
     allowedOrigins: ['acme.com'],
     createdAt: ago(60 * 24 * 14),
     updatedAt: ago(15),
+    openCount: 3,
+    agentLive: true,
   },
   {
     publicKey: 'proj_dashboard_v2',
@@ -29,6 +31,7 @@ export const MOCK_PROJECTS: Project[] = [
     allowedOrigins: [],
     createdAt: ago(60 * 24 * 5),
     updatedAt: ago(120),
+    openCount: 1,
   },
 ]
 
@@ -187,6 +190,41 @@ export function getMockProjects(): Project[] {
 export function getMockComments(projectId: string): CommentRecord[] {
   if (mocksEmpty || mocksOnboarding) return []
   return PROJECT_COMMENTS[projectId] ?? []
+}
+
+export const MOCK_WORKSPACE_NAME = 'Acme Studio'
+
+const MOCK_RULES: BrainRule[] = [
+  { id: 'rule_headlines', title: 'Keep headlines under 8 words', body: 'Marketing headlines must read at a glance on a phone.', projectKey: null, createdAt: ago(60 * 24 * 3), updatedAt: ago(60 * 24 * 3), mine: true, citations: 4 },
+  { id: 'rule_contrast', title: 'Buttons pass AA contrast', body: 'Button text keeps at least 4.5:1 contrast against its background.', projectKey: 'proj_acme_marketing', createdAt: ago(60 * 24), updatedAt: ago(60 * 24), mine: false, citations: 1 },
+]
+
+export function getMockRules(): BrainRule[] {
+  return mocksEmpty ? [] : MOCK_RULES
+}
+
+const MOCK_NEXT_STEPS: Record<string, NextStepRecord[]> = {
+  proj_acme_marketing: [{
+    id: 'step_cta', title: 'Raise the CTA contrast', tag: 'design', status: 'paused', createdAt: ago(20),
+    comments: [{ id: 'cmt_02', body: 'El contraste del CTA contra el fondo no pasa AA. Subir a un naranja más saturado.', authorName: 'Pranav Sunil' }],
+    requesters: ['Pranav Sunil'],
+    citations: [{ ruleId: 'rule_contrast', title: 'Buttons pass AA contrast' }],
+    conflict: { ruleId: 'rule_contrast', ruleTitle: 'Buttons pass AA contrast', question: 'The saturated orange only reaches 3.9:1. Keep the AA rule and pick a darker shade, or update the rule?', decision: null },
+  }],
+}
+
+// The page shows only steps whose comments are ready, so empty modes need no branch here.
+export function getMockNextSteps(projectId: string): NextStepRecord[] {
+  return MOCK_NEXT_STEPS[projectId] ?? []
+}
+
+const MOCK_RUNS: AgentRun[] = [
+  { id: 'share_2:codex', projectKey: 'proj_acme_marketing', agentLabel: 'codex', startedAt: ago(60 * 3), endedAt: ago(60 * 3 - 12), steps: 5, commentsCompleted: 0, outcome: 'blocked' },
+  { id: 'share_1:claude-code', projectKey: 'proj_acme_marketing', agentLabel: 'claude-code', startedAt: ago(60 * 26), endedAt: ago(60 * 25), steps: 14, commentsCompleted: 3, outcome: 'completed' },
+]
+
+export function getMockAgentRuns(projectId: string): AgentRun[] {
+  return MOCK_RUNS.filter((run) => run.projectKey === projectId)
 }
 
 const ADMIN_NAMES = ['Tomas', 'Pranav', 'Dianne', 'Lara', 'Agustin', 'Cris', 'Alessandro', 'María']

@@ -5,11 +5,9 @@ import type { Comment } from '../lib/types'
 import { sendErrorMessage, useDirectDelivery } from './useDirectDelivery'
 
 const api = vi.hoisted(() => ({ getAgentDelivery: vi.fn(), sendAgentDispatch: vi.fn() }))
-const flags = vi.hoisted(() => ({ directSendEnabled: true }))
 vi.mock('../api', () => api)
-vi.mock('../lib/flags', () => ({ get directSendEnabled() { return flags.directSendEnabled } }))
 
-const listener = (listenerId: string, online = true) => ({ listenerId, label: `term ${listenerId}`, repoUrl: '', online, stopped: !online })
+const listener = (listenerId: string, online = true) => ({ listenerId, label: `term ${listenerId}`, repoUrl: '', online })
 const comment = (id: string, updatedAt = 't1') => ({ id, updatedAt }) as Comment
 const state = (over: Partial<AgentDelivery> = {}): AgentDelivery => ({ listeners: [listener('l1')], dispatches: [], ...over })
 
@@ -21,18 +19,13 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  flags.directSendEnabled = true
   api.getAgentDelivery.mockReset().mockResolvedValue(state())
   api.sendAgentDispatch.mockReset().mockResolvedValue({ dispatchId: 'd', state: 'queued' })
 })
 afterEach(() => vi.useRealTimers())
 
-it('stays idle while the flag is off, the page is closed, or no project is open', async () => {
-  flags.directSendEnabled = false
-  const off = renderHook(() => useDirectDelivery('/api', 'token', 'pk', true))
-  expect(off.result.current.enabled).toBe(false)
+it('stays idle while the page is closed or no project is open', async () => {
   const closed = renderHook(() => useDirectDelivery('/api', 'token', 'pk', false))
-  flags.directSendEnabled = true
   const none = renderHook(() => useDirectDelivery('/api', 'token', null, true))
   await act(() => none.result.current.send([comment('c1')]))
   expect(closed.result.current.enabled).toBe(false)
@@ -42,7 +35,7 @@ it('stays idle while the flag is off, the page is closed, or no project is open'
 })
 
 it('picks the only listening terminal and sends what is not already with an agent', async () => {
-  api.getAgentDelivery.mockResolvedValue(state({ dispatches: [{ dispatchId: 'd0', commentId: 'c2', listenerId: 'l1', state: 'working', reason: null }] }))
+  api.getAgentDelivery.mockResolvedValue(state({ dispatches: [{ dispatchId: 'd0', commentId: 'c2', state: 'working' }] }))
   const { result } = renderHook(() => useDirectDelivery('/api', 'token', 'pk', true))
   expect(result.current.checking).toBe(true)
   await waitFor(() => expect(result.current.online).toBe(true))
@@ -55,6 +48,24 @@ it('picks the only listening terminal and sends what is not already with an agen
   expect(api.sendAgentDispatch).toHaveBeenCalledWith('/api', 'token', 'pk', expect.objectContaining({ listenerId: 'l1', commentId: 'c1', expectedUpdatedAt: 't1' }))
   expect(api.getAgentDelivery).toHaveBeenCalledTimes(2)
   expect(result.current).toMatchObject({ busy: false, error: null })
+})
+
+it('tells the caller when a send changes state, and not on unchanged polls', async () => {
+  const dispatch = (state: string) => state ? [{ dispatchId: 'd0', commentId: 'c1', state }] : []
+  api.getAgentDelivery
+    .mockResolvedValueOnce(state())
+    .mockResolvedValueOnce(state({ dispatches: dispatch('queued') }))
+    .mockResolvedValueOnce(state({ dispatches: dispatch('completed') }))
+    .mockResolvedValue(state({ dispatches: dispatch('completed') }))
+  const onProgress = vi.fn()
+  const { result } = renderHook(() => useDirectDelivery('/api', 'token', 'pk', true, onProgress))
+  await waitFor(() => expect(result.current.online).toBe(true))
+  expect(onProgress).not.toHaveBeenCalled()
+  await act(() => result.current.send([comment('c1')]))
+  expect(onProgress).toHaveBeenCalledTimes(1)
+  await act(() => result.current.send([comment('c2')]))
+  await act(() => result.current.send([comment('c3')]))
+  expect(onProgress).toHaveBeenCalledTimes(2)
 })
 
 it('waits for a choice when several or no terminals listen, and keeps it across polls', async () => {
@@ -159,5 +170,38 @@ it('words each send failure', () => {
   expect(sendErrorMessage('listener_stopped')).toBe(sendErrorMessage('listener_offline'))
   expect(sendErrorMessage('feedback_changed')).toMatch(/changed/)
   expect(sendErrorMessage('already_sent')).toMatch(/already/)
-  expect(sendErrorMessage(undefined)).toMatch(/won’t be sent twice/)
+  expect(sendErrorMessage('listener_not_found')).toBe(sendErrorMessage('listener_offline'))
+  expect(sendErrorMessage('feedback_not_eligible')).toMatch(/isn’t ready for an agent anymore/)
+  expect(sendErrorMessage('idempotency_conflict')).toMatch(/Reload the page/)
+  expect(sendErrorMessage('forbidden')).toMatch(/Pick another terminal/)
+  expect(sendErrorMessage('sender_removed')).toMatch(/Your role can’t send/)
+  expect(sendErrorMessage('project_access_denied')).toBe(sendErrorMessage('sender_removed'))
+  expect(sendErrorMessage('repository_changed')).toMatch(/Start listening again/)
+  expect(sendErrorMessage('agent_access_required')).toMatch(/plan doesn’t include Agent/)
+  expect(sendErrorMessage('upgrade_required')).toBe(sendErrorMessage('agent_access_required'))
+  expect(sendErrorMessage('owner_upgrade_required')).toMatch(/Ask the project owner to upgrade/)
+  expect(sendErrorMessage('seat_limit_reached')).toMatch(/no Agent seat/)
+  // A refusal without a code still says why.
+  expect(sendErrorMessage(undefined, 403)).toBe(sendErrorMessage('sender_removed'))
+  expect(sendErrorMessage(undefined, 402)).toBe(sendErrorMessage('agent_access_required'))
+  for (const code of [undefined, 'dispatch_unavailable', 'mystery', 'toString']) expect(sendErrorMessage(code)).toMatch(/won’t be sent twice/)
+  expect(sendErrorMessage(undefined, 503)).toMatch(/won’t be sent twice/)
+})
+
+it('stops asking which terminals listen once the plan or role refuses', async () => {
+  vi.useFakeTimers()
+  api.getAgentDelivery.mockRejectedValue(Object.assign(new Error('Upgrade'), { status: 402, code: 'upgrade_required' }))
+  const { result } = renderHook(() => useDirectDelivery('/api', 'token', 'pk', true))
+  await act(() => vi.advanceTimersByTimeAsync(0))
+  expect(result.current.error).toBe(sendErrorMessage('upgrade_required'))
+  await act(() => vi.advanceTimersByTimeAsync(20_000))
+  expect(api.getAgentDelivery).toHaveBeenCalledOnce()
+})
+
+it('passes the status of a refused send that has no code', async () => {
+  api.sendAgentDispatch.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }))
+  const { result } = renderHook(() => useDirectDelivery('/api', 'token', 'pk', true))
+  await waitFor(() => expect(result.current.online).toBe(true))
+  await act(() => result.current.send([comment('c1')]))
+  expect(result.current.error).toBe(sendErrorMessage(undefined, 403))
 })

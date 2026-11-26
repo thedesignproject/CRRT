@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { cn } from '../lib/utils'
 import type { ShareEventsResponse } from '../api'
 import { describeEvent } from '../lib/format'
-import { AGENTS, PROMPT_AGENT_ID, type AgentMeta, type Comment } from '../lib/types'
+import { AGENTS, PROMPT_AGENT_ID, agentNoun, type AgentMeta, type Comment } from '../lib/types'
 import { BotIcon, CheckIcon, ChevronDownIcon, CopyIcon, SpinnerIcon, XIcon } from './icons'
 
 /** Agent handoff pieces shared by the Next steps and Agent runs pages. */
@@ -71,7 +71,7 @@ export function HandoffCTA({
     copyStatus === 'copying'
       ? 'Copying…'
       : copyStatus === 'copied'
-        ? `Paste into ${selectedAgentMeta.id === PROMPT_AGENT_ID ? 'your agent' : selectedAgentMeta.name}`
+        ? `Paste into ${agentNoun(selectedAgentMeta)}`
         : copyStatus === 'error'
           ? 'Copy failed — try again'
           : selectedAgentMeta.id === PROMPT_AGENT_ID
@@ -214,7 +214,7 @@ export function FirstTimeHint({ agentName, dismissed }: { agentName: string; dis
   if (seen) return null
 
   return (
-    <p className="mt-3 text-[11px] text-muted-foreground/70 leading-relaxed text-center px-2">
+    <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed text-center px-2">
       Paste into {agentName} — it'll work the queue and update status live here.
     </p>
   )
@@ -260,7 +260,7 @@ export function LiveQueue({ projectComments, events, selectedCommentId, onSelect
   if (items.length === 0) {
     return (
       <div className="px-4 py-4 border-t border-sidebar-border">
-        <p className="text-[11px] text-muted-foreground/60">Queue is empty.</p>
+        <p className="text-[11px] text-muted-foreground">Queue is empty.</p>
       </div>
     )
   }
@@ -303,7 +303,7 @@ export function LiveQueue({ projectComments, events, selectedCommentId, onSelect
                   >
                     {c.body}
                   </p>
-                  <p className="text-[10px] text-muted-foreground/70 mt-1 flex items-center gap-1.5">
+                  <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
                     <span className={stageTextClass(c)}>{stage}</span>
                     {ev && (
                       <>

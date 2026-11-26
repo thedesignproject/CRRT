@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import type { DirectDelivery } from './useDirectDelivery'
 
-const listener = (listenerId: string, online = true) => ({ listenerId, label: `term ${listenerId}`, repoUrl: '', online, stopped: !online })
+const listener = (listenerId: string, online = true) => ({ listenerId, label: `term ${listenerId}`, repoUrl: '', online })
 
 export function delivery(over: Partial<DirectDelivery> = {}): DirectDelivery {
   return {

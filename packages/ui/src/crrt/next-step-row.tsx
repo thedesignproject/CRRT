@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Check } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Initials } from "./initials";
@@ -13,6 +14,10 @@ export type NextStep = {
   active?: boolean;
   /** Delivery status from a direct send, such as "Queued". */
   status?: string;
+  /** Kind of change, such as "copy" or "design". */
+  tag?: string;
+  /** Titles of the Brain rules the step follows. */
+  rules?: string[];
 };
 
 type NextStepRowProps = {
@@ -22,10 +27,12 @@ type NextStepRowProps = {
   onToggle?: (id: string) => void;
   /** Opens the step's source comment. */
   onOpen?: (id: string) => void;
+  /** Shown under the meta line, e.g. a rule conflict the agent paused on. */
+  children?: ReactNode;
 };
 
-/** One next step: what to change and who asked. */
-export function NextStepRow({ step, checked = false, onToggle, onOpen }: NextStepRowProps) {
+/** One next step: what to change, who asked and the rules it follows. */
+export function NextStepRow({ step, checked = false, onToggle, onOpen, children }: NextStepRowProps) {
   const done = Boolean(step.doneBy);
   const title = <span className={cn("font-medium", done ? "text-text-subtle line-through" : "text-text-strong")}>{step.title}</span>;
   return (
@@ -60,6 +67,7 @@ export function NextStepRow({ step, checked = false, onToggle, onOpen }: NextSte
           title
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-text-subtle">
+          {step.tag && <span className="rounded-md bg-surface-4 px-1.5 font-mono text-text-body">{step.tag}</span>}
           <span className="flex items-center -space-x-1">
             {step.requesters.map((r) => (
               <Initials key={r} name={r} size="sm" />
@@ -68,6 +76,9 @@ export function NextStepRow({ step, checked = false, onToggle, onOpen }: NextSte
           <span>
             {step.comments} {step.comments === 1 ? "comment" : "comments"}
           </span>
+          {step.rules?.map((rule) => (
+            <span key={rule} className="font-mono">· Follows: {rule}</span>
+          ))}
           {done && <span className="text-agent-done">· completed by {step.doneBy}</span>}
           {step.status ? (
             <span className={step.active ? "text-agent-working" : undefined}>· {step.status}</span>
@@ -75,6 +86,7 @@ export function NextStepRow({ step, checked = false, onToggle, onOpen }: NextSte
             step.active && <span className="text-agent-working">· agent working</span>
           )}
         </div>
+        {children}
       </div>
     </li>
   );

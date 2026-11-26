@@ -1,7 +1,7 @@
 import posthog from '../../posthog'
 import { ProjectPrivacy } from './ProjectPrivacy'
 import { useEffect, useId, useRef, useState } from 'react'
-import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
+import { AGENT_INSTRUCTIONS_MAX, deleteProject, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
 import { ExportProjectFeedback } from './ExportProjectFeedback'
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { useStorybookConnected } from '../hooks/useStorybookConnected'
@@ -33,9 +33,11 @@ interface ProjectSettingsProps {
   onProjectsChanged: () => void
   /** Open with the Storybook setup expanded, e.g. from the Get started checklist. */
   connectStorybook?: boolean
+  /** Runs after the owner deletes the project; the Danger zone shows only when set. */
+  onDeleted?: () => void | Promise<void>
 }
 
-export function ProjectSettings({ project, apiBase, accessToken, currentUserId, onBack, onProjectsChanged, connectStorybook = false }: ProjectSettingsProps) {
+export function ProjectSettings({ project, apiBase, accessToken, currentUserId, onBack, onProjectsChanged, connectStorybook = false, onDeleted }: ProjectSettingsProps) {
   const settings = useProjectSettings(apiBase, accessToken, project.publicKey, currentUserId, onProjectsChanged)
   const { members, invites, loading, error, isAdmin, isOwner } = settings
 
@@ -52,6 +54,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [instructions, setInstructions] = useState('')
   const [instructionsBusy, setInstructionsBusy] = useState(false)
   const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null)
+  const [deleteName, setDeleteName] = useState('')
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [storybookOpen, setStorybookOpen] = useState(connectStorybook)
   // What the open panel last reported wins over the check made when Settings opened.
   const [storybookLive, setStorybookLive] = useState<boolean | null>(null)
@@ -199,6 +204,19 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
       if (trigger?.isConnected) trigger.focus()
       else teamHeadingRef.current?.focus()
     }, 0)
+  }
+
+  async function removeProject() {
+    setDeleteError(null)
+    setDeleteBusy(true)
+    try {
+      await deleteProject(apiBase, accessToken, project.publicKey)
+      await onDeleted!()
+    } catch (err) {
+      setDeleteError((err as Error).message)
+    } finally {
+      setDeleteBusy(false)
+    }
   }
 
   async function confirmOwnershipTransfer(target: ProjectMember) {
@@ -583,6 +601,43 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {isOwner && onDeleted && (
+          <section className="mt-8" aria-labelledby="danger-heading">
+            <h2 id="danger-heading" className={sectionTitle}>Danger zone</h2>
+            <form onSubmit={(e) => { e.preventDefault(); void removeProject() }} className={cn(card, 'mt-3 space-y-3 p-4')}>
+              <div>
+                <p className="text-[13px] font-medium text-foreground">Delete this project</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Deletes its feedback, members, invites, shares, integrations and Storybook connections for everyone. Recordings and documents are kept, no longer in any project, and so are usage counts. This can&rsquo;t be undone.
+                </p>
+              </div>
+              <label htmlFor="ps-delete" className="block text-[11px] font-medium text-muted-foreground">
+                Type <span className="font-semibold text-foreground">{project.name}</span> to confirm
+              </label>
+              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                <input
+                  id="ps-delete"
+                  type="text"
+                  value={deleteName}
+                  onChange={(e) => setDeleteName(e.target.value)}
+                  disabled={deleteBusy}
+                  className={inputField}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="submit"
+                  disabled={deleteName !== project.name || deleteBusy}
+                  className="px-3 py-2 rounded-md text-xs font-semibold transition-all btn-press shrink-0 bg-destructive text-destructive-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deleteBusy ? 'Deleting…' : 'Delete project'}
+                </button>
+              </div>
+              {deleteError && <p role="alert" className="text-[11px] text-status-rejected">{deleteError}</p>}
+            </form>
           </section>
         )}
       </div>

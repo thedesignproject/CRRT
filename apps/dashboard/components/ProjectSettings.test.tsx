@@ -406,3 +406,48 @@ it('keeps company access singular across repeated settings edits',()=>{
  expect(errors.mock.calls.flat().join(' ')).not.toMatch(/same key/)
  errors.mockRestore()
 })
+
+describe('ProjectSettings danger zone', () => {
+  const owned = (onDeleted?: () => Promise<void>) => render(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} onDeleted={onDeleted} />)
+
+  it('shows only to the owner, and only when the app handles deletion', () => {
+    vi.mocked(useProjectSettings).mockReturnValue(settings({ isOwner: false }) as never)
+    const { unmount } = owned(vi.fn())
+    expect(screen.queryByRole('heading', { name: 'Danger zone' })).toBeNull()
+    unmount()
+    vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+    view()
+    expect(screen.queryByRole('heading', { name: 'Danger zone' })).toBeNull()
+  })
+
+  it('deletes after the project name is typed, then hands over to the app', async () => {
+    vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetch)
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const onDeleted = vi.fn().mockResolvedValue(undefined)
+    owned(onDeleted)
+    expect(screen.getByText(/Recordings and documents are kept, no longer in any project, and so are usage counts\./)).toBeInTheDocument()
+    const remove = screen.getByRole('button', { name: 'Delete project' })
+    expect(remove).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Type Demo to confirm'), { target: { value: 'demo' } })
+    expect(remove).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Type Demo to confirm'), { target: { value: 'Demo' } })
+    await act(async () => fireEvent.click(remove))
+    expect(fetch).toHaveBeenCalledWith('/api/v1/projects/demo', { method: 'DELETE', headers: { Authorization: 'Bearer token' } })
+    expect(onDeleted).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the project and shows why when the server refuses', async () => {
+    vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'A tracker export is pending.' }), { status: 409 })))
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const onDeleted = vi.fn()
+    owned(onDeleted)
+    fireEvent.change(screen.getByLabelText('Type Demo to confirm'), { target: { value: 'Demo' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Delete project' })))
+    expect(screen.getByRole('alert')).toHaveTextContent('A tracker export is pending.')
+    expect(onDeleted).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Delete project' })).toBeEnabled()
+  })
+})
