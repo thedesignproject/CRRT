@@ -101,6 +101,7 @@ vi.mock('./components/CommentDetail', () => ({
     selectedComment?: { id: string; visibility?: 'shared' | 'internal' } | null
     onVisibilityChange?: (id: string, visibility: 'shared' | 'internal') => void
     onConnectStorybook?: () => void
+    onOpenIntegrations?: () => void
     storybookConnected?: boolean
   }) => <div data-storybook-connected={props.storybookConnected} data-testid="detail" data-read-only={props.readOnly} data-comment-id={props.selectedComment?.id}>
     {props.apiBase}:{props.accessToken}:{props.selectedComment?.visibility ?? 'none'}
@@ -110,6 +111,7 @@ vi.mock('./components/CommentDetail', () => ({
     )}>change audience</button>}
     <button onClick={() => props.onVisibilityChange?.('missing-comment', 'internal')}>change missing audience</button>
     {props.onConnectStorybook && <button onClick={props.onConnectStorybook}>connect storybook</button>}
+    {props.onOpenIntegrations && <button onClick={props.onOpenIntegrations}>connect tracker</button>}
   </div>,
 }))
 vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: { agentAction?: ReactNode; onNewProject: () => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void; children?: ReactNode; footer?: ReactNode; agentNav?: { readyCount: number; live: boolean; active: string | null; onOpenNextSteps: () => void; onOpenAgentRuns: () => void } }) => <>{props.agentAction}{props.agentNav && <><button aria-pressed={props.agentNav.active === 'next-steps'} onClick={props.agentNav.onOpenNextSteps}>nav next steps {props.agentNav.readyCount}</button><button aria-pressed={props.agentNav.active === 'agent-runs'} onClick={props.agentNav.onOpenAgentRuns}>{props.agentNav.live ? 'nav agent runs live' : 'nav agent runs'}</button></>}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={props.onNewProject}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button>{props.children}{props.footer}</> }))
@@ -262,6 +264,23 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByText('Settings for project-1 at Storybook')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
+  })
+
+  it('opens plain Settings to connect a tracker, only for people who manage the project', async () => {
+    const projects = fixtures.projects
+    fixtures.projects = [{ ...projects[0], capabilities: ['feedback:manage', 'project:manage'] }]
+    onTestFinished(() => { fixtures.projects = projects })
+    const view = render(<App />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'project' })).toHaveAttribute('aria-pressed', 'true'))
+    fireEvent.click(screen.getByRole('button', { name: 'connect tracker' }))
+    expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
+    expect(screen.queryByText('Settings for project-1 at Storybook')).not.toBeInTheDocument()
+    view.unmount()
+
+    fixtures.projects = [{ ...projects[0], capabilities: ['feedback:manage'] }]
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('detail')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'connect tracker' })).not.toBeInTheDocument()
   })
 
   it('forgets the Storybook jump after going back, and asks whether Storybook is connected for an empty owned project', async () => {

@@ -993,6 +993,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           readOnly={!canManageFeedback}
           onConnectStorybook={activeProject?.role === 'owner' ? openStorybookSetup : undefined}
           storybookConnected={storybookConnected === true}
+          onOpenIntegrations={canManageProject ? () => { setConnectStorybook(false); setView('settings') } : undefined}
           selectedComment={selectedComment}
           selectedProject={selectedProject}
           commentsLoading={commentsLoading}
