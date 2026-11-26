@@ -33,8 +33,11 @@ export async function changeShare(actor: string, id: string, revoke: boolean) {
 export async function playback(row: RecordingRow) {
   const db = database()
   const jobs = checked(await db.from('recording_jobs').select('stage,state,failure').eq('recording_id', row.id))
-  const mediaReady = jobs?.some(j => j.stage === 'metadata' && j.state === 'done')
-  const media = mediaReady ? await artifacts(row.id) : []
+  // Finalize requires every source upload to pass completion checks, so the original plays
+  // while derivation continues. Until metadata verifies every source, a worker checksum mismatch withdraws it.
+  const verified = jobs?.some(j => j.stage === 'metadata' && j.state === 'done')
+  const rejected = !verified && jobs?.some(j => j.failure?.code === 'record_artifact_mismatch')
+  const media = row.manifest_hash && !rejected ? await artifacts(row.id) : []
   const signedArtifacts = await Promise.all(media.map(async artifact => {
     checkPath(row.id, artifact.path)
     const signed = checked(await recordObjectStorage(row).signPlayback(artifact.path, 300))
