@@ -16,7 +16,7 @@ export const staticAssetRoutes = [
 ]
 
 export const applicationFallbackRoutes = [
-  { src: '^/(?:privacy|support|terms)/?$', dest: '/app-shell.html' },
+  { src: '^/(?:privacy|support|terms|appsumo)/?$', dest: '/app-shell.html' },
   { src: '^/d/[^/]+/?$', dest: '/app-shell.html' },
   { src: '^/dashboard(?:/.*)?$', dest: '/dashboard/index.html' },
   { src: '^/audit(?:/.*)?$', dest: '/app-shell.html' },
