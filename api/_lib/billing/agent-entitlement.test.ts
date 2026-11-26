@@ -50,13 +50,13 @@ it('does not read billing at all for self-hosted Agent access',async()=>{
  expect(getAccount).not.toHaveBeenCalled()
 })
 it('keeps legacy owners and collaborators eligible after Studio ends',async()=>{
- const legacy={...account,is_legacy:true,plan:null,price_id:null,subscription_status:null,period_start:null,period_end:null}
+ const legacy={...account,included_pro:'early_access',plan:null,price_id:null,subscription_status:null,period_start:null,period_end:null}
  expect(hasAgentEntitlement(legacy,cloud)).toBe(true)
  vi.mocked(getAccount).mockResolvedValue(legacy as never)
  actor();expect(await resolveWidgetAgentAccess('p','actor')).toMatchObject({state:'ready',collaboratorSeatLimit:9})
- vi.mocked(getAccount).mockResolvedValue({...account,is_legacy:true,plan:'studio',price_id:'price_studio'} as never)
+ vi.mocked(getAccount).mockResolvedValue({...account,included_pro:'early_access',plan:'studio',price_id:'price_studio'} as never)
  actor();expect(await resolveWidgetAgentAccess('p','actor')).toMatchObject({state:'ready',collaboratorSeatLimit:24})
- vi.mocked(getAccount).mockResolvedValue({...account,is_legacy:true,plan:'studio',subscription_status:'canceled'} as never)
+ vi.mocked(getAccount).mockResolvedValue({...account,included_pro:'early_access',plan:'studio',subscription_status:'canceled'} as never)
  actor(true);expect(await resolveWidgetAgentAccess('p','actor')).toMatchObject({state:'ready',collaboratorSeatLimit:9})
 })
 

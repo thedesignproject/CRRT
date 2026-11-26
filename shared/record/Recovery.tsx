@@ -4,7 +4,7 @@ import './Recovery.css'
 
 export type RecoveryStage = 'metadata' | 'transcription' | 'alignment'
 const messages = {
-  metadata: { failed: 'We couldn’t prepare your video.', retry: 'Retry video', automatic: 'We’re retrying video preparation automatically.' },
+  metadata: { failed: 'We couldn’t prepare screenshots for this recording.', retry: 'Retry screenshots', automatic: 'We’re retrying screenshots automatically.' },
   transcription: { failed: 'We couldn’t transcribe this recording.', retry: 'Retry transcription', automatic: 'We’re retrying transcription automatically.' },
   alignment: { failed: 'We couldn’t prepare your key moments.', retry: 'Retry key moments', automatic: 'We’re retrying key moments automatically.' },
 }
@@ -30,7 +30,7 @@ export function RecordingRecovery({ stages, retry }: { stages: RecordingPlayback
       if (!(job.stage in messages)) return null
       const stage = job.stage as RecoveryStage, message = messages[stage]
       if (job.state === 'failed') return <div key={stage} className="recording-recovery">
-        <p>{message.failed}</p>
+        <p>{stage === 'metadata' && job.failure?.code === 'record_artifact_mismatch' ? 'We couldn’t verify the uploaded video.' : message.failed}</p>
         {retry && job.failure?.retryable && <button type="button" disabled={busy !== null} onClick={() => { void request(stage) }}>{busy === stage ? 'Retrying…' : message.retry}</button>}
       </div>
       if (job.failure && (job.state === 'pending' || job.state === 'running')) return <p key={stage} role="status" className="recording-recovery">{message.automatic}</p>
