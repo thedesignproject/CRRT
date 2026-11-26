@@ -745,6 +745,35 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByText('project footer')).toBeInTheDocument()
   })
 
+  it('keeps comment shortcuts on the feedback list and S off Settings', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
+      body: 'Managed feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
+    // The selected comment is hidden on the agent pages, so A, D and M must not touch it there.
+    fireEvent.click(screen.getByRole('button', { name: 'nav next steps 0' }))
+    for (const key of ['a', 'd', 'm']) fireEvent.keyDown(window, { key })
+    fireEvent.click(screen.getByRole('button', { name: 'nav agent runs' }))
+    for (const key of ['a', 'd', 'm']) fireEvent.keyDown(window, { key })
+    expect(fixtures.updateReview).not.toHaveBeenCalled()
+    expect(fixtures.updateImpl).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 's' })
+    fireEvent.keyDown(window, { key: ' ' })
+    fireEvent.keyDown(window, { key: 'a' })
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledOnce())
+
+    fireEvent.click(screen.getByRole('button', { name: 'settings' }))
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
+  })
+
   it('leaves Next steps and disables Agents when the Inbox clears the project', async () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Agents, 0 ready' }))

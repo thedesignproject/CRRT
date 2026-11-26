@@ -701,22 +701,25 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
 
-      if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
-      if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
-      if (e.key === ' ') { e.preventDefault(); goNext() }
+      // Comment shortcuts act on the selected comment, so only while the feedback list shows it.
+      if (view === 'feedback') {
+        if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
+        if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
+        if (e.key === ' ') { e.preventDefault(); goNext() }
 
-      if (selectedComment && canManageFeedback) {
-        if (e.key === 'a') toggleReview(selectedComment, 'accepted')
-        if (e.key === 'd') toggleReview(selectedComment, 'rejected')
-        if (e.key === 'm') handleToggleDone(selectedComment.id)
+        if (selectedComment && canManageFeedback) {
+          if (e.key === 'a') toggleReview(selectedComment, 'accepted')
+          if (e.key === 'd') toggleReview(selectedComment, 'rejected')
+          if (e.key === 'm') handleToggleDone(selectedComment.id)
+        }
       }
 
-      if (e.key === 's' && canOpenAgentPanel) setView((v) => v === 'next-steps' ? 'feedback' : 'next-steps')
+      if (e.key === 's' && canOpenAgentPanel && (view === 'feedback' || agentView !== null)) setView((v) => v === 'next-steps' ? 'feedback' : 'next-steps')
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
+  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, agentView, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
