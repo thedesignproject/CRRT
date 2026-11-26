@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
         '@crrt/ui': path.resolve(__dirname, '../../packages/ui/src'),
       },
       // packages/ui may have its own node_modules locally; keep one React and one icon set.
-      dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge'],
+      dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge', '@base-ui/react'],
     },
     define: {
       __SUPABASE_URL__: JSON.stringify(env.SUPABASE_URL ?? ''),

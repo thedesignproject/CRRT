@@ -42,37 +42,40 @@ export function StatusBadge({ comment, className }: { comment: Comment; classNam
   return <StatusChip status={STUDIO_STATUS[ds]} working={Boolean(comment.claimedByAgentId)} className={className} />
 }
 
-export function ActionBtn({ children, variant, active, onClick, shortcut, disabled }: {
+/**
+ * Detail and footer action. `primary` is the one carrot action on screen and
+ * `ghost` the quiet one beside it. An active state reads as the status it sets
+ * (agent, done or rejected).
+ */
+export function ActionBtn({ children, variant, active, primary, ghost, onClick, shortcut, disabled }: {
   children: React.ReactNode
   variant: 'accept' | 'reject' | 'neutral' | 'done'
   active?: boolean
+  primary?: boolean
+  /** Quiet secondary action next to the primary one: no fill or ring until hover. */
+  ghost?: boolean
   onClick?: () => void
   shortcut?: string
   disabled?: boolean
 }) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
+  const pressed = variant === 'neutral' ? undefined : Boolean(active)
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
       title={shortcutsEnabled ? shortcut : undefined}
       className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+        'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors',
         'disabled:opacity-40 disabled:pointer-events-none btn-press',
-        variant === 'accept' && (active
-          ? 'bg-status-accepted-bg text-status-accepted border border-status-accepted/30'
-          : 'border border-border bg-card text-foreground hover:bg-status-accepted-bg hover:text-status-accepted hover:border-status-accepted/30'
-        ),
-        variant === 'reject' && (active
-          ? 'bg-status-rejected-bg text-status-rejected border border-status-rejected/30'
-          : 'border border-border bg-card text-foreground hover:bg-status-rejected-bg hover:text-status-rejected hover:border-status-rejected/30'
-        ),
-        variant === 'done' && (active
-          ? 'bg-status-done-bg text-status-done border border-status-done/30'
-          : 'border border-border bg-card text-foreground hover:bg-status-done-bg hover:text-status-done hover:border-status-done/30'
-        ),
-        variant === 'neutral' && 'border border-border bg-card text-foreground hover:bg-accent',
+        active && variant === 'accept' && 'bg-status-agent-bg text-status-agent-fg ring-1 ring-inset ring-border',
+        active && variant === 'done' && 'bg-status-fixed-bg text-status-fixed-fg ring-1 ring-inset ring-border',
+        active && variant === 'reject' && 'bg-status-rejected-bg text-status-rejected ring-1 ring-inset ring-border',
+        !active && primary && 'bg-primary text-primary-foreground hover:bg-primary/90',
+        !active && ghost && 'text-text-strong hover:bg-surface-3',
+        !active && !primary && !ghost && 'bg-surface-2 text-text-strong ring-1 ring-inset ring-border hover:bg-surface-3',
       )}
     >
       {children}

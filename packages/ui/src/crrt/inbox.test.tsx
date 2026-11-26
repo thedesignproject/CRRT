@@ -159,6 +159,14 @@ describe("PinnedPreview", () => {
     expect(screen.getByText("Page")).toBeTruthy();
   });
 
+  it("links the URL to the reviewed page when given an href", () => {
+    render(<PinnedPreview url="acme.com/pricing" href="https://acme.com/pricing" pin={1} />);
+    const link = screen.getByRole("link", { name: "acme.com/pricing" });
+    expect(link.getAttribute("href")).toBe("https://acme.com/pricing");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
   it("falls back to a skeleton page with the pin", () => {
     const { container } = render(<PinnedPreview url="x" pin={7} />);
     expect(container.querySelector("[data-pinned]")).not.toBeNull();
