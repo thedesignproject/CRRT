@@ -128,7 +128,7 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
 }))
-vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { handoff: { onCopySessionLink: () => void }; onOpenComment: (id: string) => void; onOpenRuns: () => void }) => <section data-testid="next-steps"><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
+vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { comments: Array<{ id: string }>; handoff: { onCopySessionLink: () => void }; onOpenComment: (id: string) => void; onOpenRuns: () => void }) => <section data-testid="next-steps"><span data-testid="next-step-ids">{props.comments.map((c) => c.id).join(',')}</span><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
 vi.mock('./components/AgentRunsPage', () => ({ AgentRunsPage: (props: { queue: Array<{id:string;implementationStatus:string}>; connected: boolean; notice?: string; onOpenNextSteps: () => void }) => <section data-testid="agent-runs"><span data-testid="agent-queue">{props.connected ? props.queue.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span>{props.notice && <p role="status">{props.notice}</p>}<button onClick={props.onOpenNextSteps}>go to next steps</button></section> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
@@ -1679,4 +1679,16 @@ it('records an agent handoff only after copying the session prompt succeeds', as
   expect(fixtures.capture).not.toHaveBeenCalledWith('agent_handoff_copied', expect.anything())
   fireEvent.click(screen.getByRole('button', { name: 'copy session prompt' }))
   await waitFor(() => expect(fixtures.capture).toHaveBeenCalledWith('agent_handoff_copied', { agent: expect.any(String) }))
+})
+
+it('hands the selected ready feedback to Agents, or everything ready without a selection', async () => {
+ fixtures.comments = [readyFeedback('comment-1'), readyFeedback('comment-2'), { ...readyFeedback('comment-3'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: /nav next steps/ }))
+ expect(screen.getByTestId('next-step-ids')).toHaveTextContent('comment-1,comment-2')
+ fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
+ fireEvent.click(await screen.findByRole('button', { name: 'project' }))
+ fireEvent.click(await screen.findByRole('button', { name: 'toggle test comment' }))
+ fireEvent.click(screen.getByRole('button', { name: /nav next steps/ }))
+ expect(screen.getByTestId('next-step-ids')).toHaveTextContent(/^comment-1$/)
 })

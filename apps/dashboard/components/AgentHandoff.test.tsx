@@ -124,12 +124,35 @@ describe('agent handoff pieces', () => {
 
     view.rerender(<AgentError message="Project not found" code={null} onUpgrade={upgrade} />)
     expect(screen.getByText("Couldn't open a session for this project.")).toBeInTheDocument()
-    expect(screen.getByText(/Switch projects and come back/)).toBeInTheDocument()
+    expect(screen.queryByText(/Switch projects/)).toBeNull()
 
     view.rerender(<AgentError message="Lost connection" code={null} onUpgrade={upgrade} />)
     expect(screen.getByText('Lost connection to the agent session.')).toBeInTheDocument()
 
     view.rerender(<AgentError message="Network down" code={null} onUpgrade={upgrade} />)
     expect(screen.getByText("Couldn't open a session.")).toBeInTheDocument()
+  })
+
+  it('retries in place unless access or billing blocks the session', () => {
+    const retry = vi.fn()
+    const view = render(<AgentError message="Share could not be created" code={null} onUpgrade={vi.fn()} onRetry={retry} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(retry).toHaveBeenCalledOnce()
+
+    view.rerender(<AgentError message="Feedback changed. Review the selection and retry." code="invalid_selection" onUpgrade={vi.fn()} onRetry={retry} />)
+    expect(screen.getByText('Feedback changed while the session was opening.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+
+    view.rerender(<AgentError message="Select up to 500 ready comments in the feedback list to send to Agent." code={null} onUpgrade={vi.fn()} onRetry={retry} />)
+    expect(screen.getByText('Select up to 500 ready comments in the feedback list to send to Agent.')).toBeInTheDocument()
+
+    for (const code of ['forbidden', 'project_access_denied']) {
+      view.rerender(<AgentError message="Agent is unavailable for this project" code={code} onUpgrade={vi.fn()} onRetry={retry} />)
+      expect(screen.getByText('Agent is unavailable for your project role.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    }
+
+    view.rerender(<AgentError message="Network down" code={null} onUpgrade={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 })

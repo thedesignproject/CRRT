@@ -218,15 +218,18 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const canManageProject = activeProject
     ? activeProject.capabilities?.includes('project:manage') ?? true
     : false
-  const readyAgentComments = useMemo(
-    () => commentsProjectId === selectedProject
-      ? comments.filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared')
-      : [],
-    [comments, commentsProjectId, selectedProject],
-  )
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
+  // Agents work on the selected feedback when a selection includes ready items, otherwise on everything ready.
+  const readyAgentComments = useMemo(() => {
+    if (commentsProjectId !== selectedProject) return []
+    const ready = comments.filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared')
+    const selected = bulkMode ? ready.filter((comment) => bulkSelectedIds.has(comment.id)) : []
+    return selected.length > 0 ? selected : ready
+  }, [comments, commentsProjectId, selectedProject, bulkMode, bulkSelectedIds])
   const readyAgentCommentIds = useMemo(() => readyAgentComments.map((comment) => comment.id), [readyAgentComments])
   const agentProject = canOpenAgentPanel && selectedProject ? selectedProject : null
-  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt, adoptSession } = useAgentSession(
+  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt, adoptSession, retry: retryAgentSession } = useAgentSession(
     API_BASE,
     accessToken,
     agentProject,
@@ -243,8 +246,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const agentQueueComments = (activeAgentShare?.comments ?? []).map(mapServerComment)
     .filter((comment) => comment.visibility === 'shared')
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
-  const [bulkMode, setBulkMode] = useState(false)
-  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const bulkGeneration = useRef(0)
   const readyUndoRequest = useRef<symbol | null>(null)
   const clearReadyUndo = useCallback(() => {
@@ -928,6 +929,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           agentErrorCode={agentErrorCode}
           agentConnected={agentConnected}
           onUpgrade={openAgentUpgrade}
+          onRetry={retryAgentSession}
           onOpenComment={openComment}
           onOpenRuns={() => setView('agent-runs')}
           direct={directDelivery}
@@ -944,6 +946,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           notice={bulkTransitionNotice}
           selectedCommentId={selectedCommentId}
           onUpgrade={openAgentUpgrade}
+          onRetry={retryAgentSession}
           onOpenComment={openComment}
           onOpenNextSteps={() => setView('next-steps')}
         />

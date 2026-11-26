@@ -11,18 +11,24 @@ export type CopyStatus = 'idle' | 'copying' | 'copied' | 'error'
 
 const HINT_SEEN_KEY = 'crrt:dashboard:handoff-hint-seen'
 
-export function AgentError({ message, code, onUpgrade }: { message: string; code: string | null; onUpgrade: () => void }) {
-  const friendly = code === 'upgrade_required'
-    ? 'Upgrade the project plan to use Agent.'
-    : code === 'owner_upgrade_required'
-      ? 'Ask the project owner to upgrade the plan.'
-      : code === 'seat_limit_reached'
-        ? 'No Agent seats are available for this project.'
-        : message.toLowerCase().includes('project not found')
-    ? "Couldn't open a session for this project."
-    : message.toLowerCase().includes('lost connection')
-      ? 'Lost connection to the agent session.'
-      : "Couldn't open a session."
+const ACCESS_CODES = new Set(['upgrade_required', 'owner_upgrade_required', 'seat_limit_reached', 'forbidden', 'project_access_denied'])
+
+function agentErrorText(message: string, code: string | null) {
+  if (code === 'upgrade_required') return 'Upgrade the project plan to use Agent.'
+  if (code === 'owner_upgrade_required') return 'Ask the project owner to upgrade the plan.'
+  if (code === 'seat_limit_reached') return 'No Agent seats are available for this project.'
+  if (code === 'forbidden' || code === 'project_access_denied') return 'Agent is unavailable for your project role.'
+  const lower = message.toLowerCase()
+  if (lower.includes('project not found')) return "Couldn't open a session for this project."
+  if (lower.includes('lost connection')) return 'Lost connection to the agent session.'
+  if (lower.includes('feedback changed')) return 'Feedback changed while the session was opening.'
+  if (lower.startsWith('select up to')) return message
+  return "Couldn't open a session."
+}
+
+export function AgentError({ message, code, onUpgrade, onRetry }: { message: string; code: string | null; onUpgrade: () => void; onRetry?: () => void }) {
+  const friendly = agentErrorText(message, code)
+  const retryable = !code || !ACCESS_CODES.has(code)
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 text-center" role="alert" aria-live="polite">
       <div className="w-10 h-10 rounded-full bg-status-rejected/10 flex items-center justify-center mb-3 text-status-rejected">
@@ -31,11 +37,9 @@ export function AgentError({ message, code, onUpgrade }: { message: string; code
       <p className="text-[13px] text-foreground/90 mb-2">{friendly}</p>
       {code === 'upgrade_required' ? (
         <button type="button" onClick={onUpgrade} className="mt-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">Upgrade plan</button>
-      ) : code ? null : (
-        <p className="text-[11px] text-muted-foreground/70 leading-relaxed max-w-[220px]">
-          Switch projects and come back to retry, or check the API server.
-        </p>
-      )}
+      ) : retryable && onRetry ? (
+        <button type="button" onClick={onRetry} className="mt-2 rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-foreground">Try again</button>
+      ) : null}
     </div>
   )
 }

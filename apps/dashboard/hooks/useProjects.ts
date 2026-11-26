@@ -65,8 +65,20 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
       setProjects((prev) => [...prev, project])
       return project
     }
-    const project = await apiClaimProject(apiBase, accessToken, projectKey, name)
+    const claimed = await apiClaimProject(apiBase, accessToken, projectKey, name)
+    // The claim response has no membership, but whoever claims a project owns it.
+    const project: Project = { ...claimed, role: claimed.role ?? 'owner' }
     setProjects((prev) => [...prev, project])
+    // Reconcile with the server's view (role and capabilities) so owner-only controls never wait for a reload.
+    try {
+      const fresh = await listProjects(apiBase, accessToken)
+      if (fresh.some((p) => p.publicKey === project.publicKey)) {
+        setProjects(fresh)
+        return fresh.find((p) => p.publicKey === project.publicKey)!
+      }
+    } catch {
+      // The optimistic project already carries the owner role.
+    }
     return project
   }, [apiBase, accessToken])
 

@@ -17,6 +17,8 @@ interface AgentRunsPageProps {
   notice?: string
   selectedCommentId: string
   onUpgrade: () => void
+  /** Opens the agent session again after it failed. */
+  onRetry?: () => void
   onOpenComment: (id: string) => void
   onOpenNextSteps: () => void
 }
@@ -29,7 +31,7 @@ function clock(iso: string) {
 }
 
 /** The live agent session for the selected project. History needs a backend; see the PR notes. */
-export function AgentRunsPage({ projectName, agentName, connected, queue, events, agentError, agentErrorCode, notice, selectedCommentId, onUpgrade, onOpenComment, onOpenNextSteps }: AgentRunsPageProps) {
+export function AgentRunsPage({ projectName, agentName, connected, queue, events, agentError, agentErrorCode, notice, selectedCommentId, onUpgrade, onRetry, onOpenComment, onOpenNextSteps }: AgentRunsPageProps) {
   const open = queue.filter((c) => c.implementationStatus !== 'done' && c.implementationStatus !== 'ready_for_testing').length
   const steps: AgentStep[] = events.slice(-STEP_LIMIT).map((ev, i, list) => ({
     t: clock(ev.createdAt),
@@ -45,7 +47,7 @@ export function AgentRunsPage({ projectName, agentName, connected, queue, events
       <div className="flex w-full max-w-200 flex-col gap-6 px-5 py-6">
         {notice && <p role="status" className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">{notice}</p>}
         {agentError ? (
-          <AgentError message={agentError} code={agentErrorCode} onUpgrade={onUpgrade} />
+          <AgentError message={agentError} code={agentErrorCode} onUpgrade={onUpgrade} onRetry={onRetry} />
         ) : connected ? (
           <section aria-labelledby="runs-now" className="flex flex-col gap-3">
             <h2 id="runs-now" className="text-[15px] font-semibold">Working</h2>

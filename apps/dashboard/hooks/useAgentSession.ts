@@ -28,6 +28,8 @@ export interface UseAgentSessionResult {
   loading: boolean
   copyPrompt: (target: PromptTarget) => Promise<string>
   adoptSession: (session: AgentSession, commentIds: string[]) => void
+  /** Tries to open the session again after it failed, keeping the same comments. */
+  retry: () => void
 }
 
 const POLL_INTERVAL_MS = 4000
@@ -50,6 +52,8 @@ export function useAgentSession(apiBase: string, accessToken: string, projectId:
   const [error, setError] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
   const cursorRef = useRef<number>(0)
   const activeProjectRef = useRef<string | null>(null)
 
@@ -122,7 +126,7 @@ export function useAgentSession(apiBase: string, accessToken: string, projectId:
     return () => {
       cancelled = true
     }
-  }, [apiBase, accessToken, projectId, commentIdsKey, enabled, ownerId])
+  }, [apiBase, accessToken, projectId, commentIdsKey, enabled, ownerId, attempt])
 
   useEffect(() => {
     if (!session || !enabled) return
@@ -209,5 +213,5 @@ export function useAgentSession(apiBase: string, accessToken: string, projectId:
     return res.prompt
   }, [apiBase, accessToken, session, projectId, ownerId, commentIdsKey, adoptSession])
 
-  return { session, projectName, shareState, events, error, errorCode, loading, copyPrompt, adoptSession }
+  return { session, projectName, shareState, events, error, errorCode, loading, copyPrompt, adoptSession, retry }
 }

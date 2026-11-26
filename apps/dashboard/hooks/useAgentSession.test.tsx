@@ -223,3 +223,15 @@ it('ignores an initial share failure after adopting a bulk share',async()=>{
  expect(result.current.error).toBeNull()
  unmount()
 })
+
+it('opens the same selection again after a failed attempt', async () => {
+  vi.mocked(createShare).mockRejectedValueOnce(new Error('Share could not be created — please retry.'))
+  const ids = ['c1', 'c2']
+  const { result, unmount } = renderHook(() => useAgentSession('/api', 'token', 'project', ids))
+  await waitFor(() => expect(result.current.error).toBe('Share could not be created — please retry.'))
+  act(() => result.current.retry())
+  await waitFor(() => expect(result.current.session).not.toBeNull())
+  expect(result.current.error).toBeNull()
+  expect(createShare).toHaveBeenLastCalledWith('/api', 'token', { projectId: 'project', scopeType: 'selection', commentIds: ids })
+  unmount()
+})
