@@ -84,6 +84,28 @@ Dashboard changes require `userRequested:true` and a unique `idempotencyKey` reu
 
 For GitHub repository setup, use `list_github_installations`, open its installation or reuse URL in the system browser, then read `get_github_verification` with the returned `flowId` and projectId. The verified result supplies repository choices and the installationToken for `update_repository_settings`. Do not ask the user to copy credentials or require a dashboard popup. The flow is short-lived and bound to this connection.
 
+## Install CRRT in a project
+
+Follow this section only when the user asks you to install or add CRRT to the repository you are working in, for example "install crrt". Connecting MCP alone does not authorize installation. Do all of it yourself; do not send the user to the dashboard to create a project or copy a project ID.
+
+1. **Check the app.** The widget is a React component. Confirm the repository renders a React app and find its root component or layout. Use the package manager its lockfile implies. If CRRT is already installed, reuse its existing `projectId` and stop at step 5.
+2. **Pick the project.** Call `list_dashboard_projects`. If one clearly belongs to this repository, confirm it with the user and reuse it. Otherwise create one: derive a short lowercase key from the repository name, check it with `check_project_key`, then call `claim_project` with that `projectKey` and a readable `name`. A `name` is required to create a project; without it the call only claims an existing one. If a call returns `permission_upgrade_required`, follow the permission upgrade steps above, then retry with the same `idempotencyKey`.
+3. **Set allowed domains.** Ask the user which domains the widget will run on, such as `localhost` and the production domain. Do not guess production domains. Save them with `update_project_settings` as `allowedOrigins`. An empty list accepts feedback from any site.
+4. **Install the package.** Add `@thedesignproject/crrt` with the repository's package manager.
+5. **Mount the widget once** at the app root, next to the app tree:
+
+   ```tsx
+   import { FeedbackWidget } from '@thedesignproject/crrt'
+
+   <FeedbackWidget projectId="<project key>" />
+   ```
+
+   Omit `apiBase` for CRRT Cloud; set it only for a self-hosted server. In the Next.js App Router, mount it inside a client component (`'use client'`) such as the app's providers.
+6. **Verify.** Run the project's typecheck and build. If you can start the dev server, open the app and confirm the CRRT widget loads. Press `C` to start a comment.
+7. **Report.** Give the project key, the allowed domains, and the files you changed. Do not commit, push or deploy unless the user asks.
+
+See the [install docs](https://crrt.ai/docs/install) for widget props and theming.
+
 ## Optional widget maintenance
 
 When the user requests automatic updates for an installed npm widget, follow [the widget update skill](https://crrt.ai/widget-updates/SKILL.md). It configures scheduled update PRs in their repository, with human review by default. Connecting MCP alone does not enable or authorize dependency automation.
