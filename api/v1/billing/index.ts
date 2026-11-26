@@ -6,6 +6,7 @@ import { billingSummary, checkout, planRequired, portal, trialAvailable } from '
 import { cloudBillingSummary } from '../../_lib/billing/cloud-summary.js'
 import { isCloud, parseCloudPlan, parseBillingCycle, cloudPriceCatalog } from '../../_lib/billing/plans.js'
 import { BillingBusyError } from '../../_lib/billing/store.js'
+import { AppsumoRedemptionError, redeemAppsumoCode } from '../../_lib/billing/appsumo.js'
 
 import { createCheckoutState, readCheckoutState, InvalidCheckoutState } from '../../_lib/billing/checkout-state.js'
 
@@ -42,6 +43,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET' && req.query.availability === '1') {
     const [trial, plan] = await Promise.all([trialAvailable(user.userId), planRequired(user.userId)])
     return res.status(200).json({ enabled: true, trialAvailable: trial, planRequired: plan })
+  }
+  if (req.method === 'POST' && req.body?.action === 'redeem_appsumo') {
+    try { return res.status(200).json(await redeemAppsumoCode(user.userId, req.body.code)) }
+    catch (error) {
+      if (error instanceof AppsumoRedemptionError) return jsonError(req, res, error.status, error.message)
+      return jsonError(req, res, 503, 'AppSumo redemption is temporarily unavailable.')
+    }
   }
   try {
     billingConfig()

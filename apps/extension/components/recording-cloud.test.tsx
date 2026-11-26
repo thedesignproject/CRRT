@@ -117,7 +117,7 @@ it('reports playback failures and retries an authorized failed stage', async () 
   view.unmount()
   mocks.playback.mockResolvedValue({ ...playback('failed'), stages: [{ stage: 'metadata', state: 'failed', failure: { retryable: true, stage: 'metadata' } }], recording: { state: 'failed', failure: { retryable: true, stage: 'metadata' } } })
   render(<RecordingCloud recording={recording(true)} changed={vi.fn()} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Retry video' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry screenshots' }))
   await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('recordings/remote/retry', { stage: 'metadata' }))
 })
 it('reports processing retry errors', async () => {
