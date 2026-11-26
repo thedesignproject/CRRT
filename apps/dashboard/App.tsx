@@ -96,7 +96,17 @@ function AppRoutes() {
     return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
   }
 
-  if (!session || !user) return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
+  if (!session || !user) {
+    if (pathname === '/billing') {
+      // AppSumo buyers land here from /appsumo; return them to the redeem field.
+      const search = new URLSearchParams(window.location.search)
+      const initialMode = search.get('auth') === 'signup' ? 'signup' : undefined
+      search.delete('auth')
+      const query = search.toString()
+      return <LoginPage initialMode={initialMode} continuationPath={route('/billing') + (query ? `?${query}` : '')} />
+    }
+    return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
+  }
   if (pathname === '/documents') return <DocumentsPage key={user.id} userId={user.id} apiBase={API_BASE} session={session.access_token} author={user.email ?? 'Project member'} />
 
   const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined

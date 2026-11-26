@@ -15,7 +15,7 @@ type Save = (values: Partial<BillingAccount>) => Promise<void>
 // checkout recovery redirects. Never fall back to the default configuration.
 async function portalSession(stripe: Stripe, account: BillingAccount, customerId: string, returnUrl: string) {
   let configuration: string | undefined
-  if (isCloud() && account.is_legacy) {
+  if (isCloud() && account.included_pro) {
     configuration = process.env.STRIPE_LEGACY_PORTAL_CONFIGURATION_ID
     if (!configuration || !/^bpc_[A-Za-z0-9]+$/.test(configuration)) throw new Error('Legacy billing portal is not configured')
     const settings = await stripe.billingPortal.configurations.retrieve(configuration)
@@ -89,7 +89,7 @@ export async function trialAvailable(userId: string) {
   let account
   try { account = await getAccount(userId) } catch { return false }
   if (!account) return true
-  return !account.is_legacy && !account.trial_used && (!account.subscription_status || terminal.has(account.subscription_status))
+  return !account.included_pro && !account.trial_used && (!account.subscription_status || terminal.has(account.subscription_status))
 }
 
 // Whether this user must start a plan before creating projects (Cloud limits
@@ -106,7 +106,7 @@ export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro',
   const price = cloud ? cloudPriceCatalog(process.env, cycle)[plan] : config.price
   if (cloud) assertCloudPrice(plan, await stripe.prices.retrieve(price), cycle)
   return withAccount(user.userId, async (account, save) => {
-    if (cloud && account.is_legacy && plan === 'pro') throw new Error('Cloud Pro is included for legacy users. Choose Cloud Studio to upgrade.')
+    if (cloud && account.included_pro && plan === 'pro') throw new Error('Cloud Pro is already included with your account. Choose Cloud Studio to upgrade.')
     let customerId = account.customer_id
     if (!customerId) {
       const customer = await stripe.customers.create({ metadata: { crrt_user_id: user.userId } }, { idempotencyKey: `crrt-customer-${user.userId}` })

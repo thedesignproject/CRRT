@@ -22,7 +22,7 @@ export function RecordingTranscript({ playback, atMs, seek, retry }: { playback:
         {segments.length === 0 && <p className="recording-transcript-no-results">No matching transcript. Try another word.</p>}
       </div>
       <footer>Select a passage to jump to that moment.</footer>
-    </> : <div className="recording-transcript-empty"><FileText size={24} strokeWidth={1.5} aria-hidden="true" /><h3>{stage?.state === 'failed' ? 'Transcription interrupted' : pending ? 'Transcript is on its way' : 'No transcript available'}</h3><p>{stage?.state === 'failed' ? 'The video remains available once video preparation finishes.' : pending ? 'If transcription was enabled, it will appear here when processing finishes.' : 'This recording has no transcript. You can still watch the video and explore its key moments.'}</p></div>}
+    </> : <div className="recording-transcript-empty"><FileText size={24} strokeWidth={1.5} aria-hidden="true" /><h3>{stage?.state === 'failed' ? 'Transcription interrupted' : pending ? 'Transcript is on its way' : 'No transcript available'}</h3><p>{stage?.state === 'failed' ? playback.artifacts.some(a => a.kind === 'screen') ? 'You can still watch the video.' : 'The transcript isn’t available for this recording.' : pending ? 'If transcription was enabled, it will appear here when processing finishes.' : 'This recording has no transcript. You can still watch the video and explore its key moments.'}</p></div>}
     <RecordingRecovery stages={playback.stages.filter(job => job.stage === 'transcription')} retry={retry} />
   </aside>
 }
