@@ -732,6 +732,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, agentView, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
+    setView('feedback')
     setSelectedCommentId(commentId)
     setCmdOpen(false)
   }, [])
@@ -748,11 +749,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (action === 'filter-ready') selectFilter('ready')
     if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
     if (action === 'filter-done') selectFilter('done')
-    if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
-    if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
-    if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
+    // A filter or comment picked from another page is shown in the feedback list.
+    if (action.startsWith('filter-')) setView('feedback')
+    // Like A, D and M: act on the selected comment only while the feedback list shows it.
+    if (view === 'feedback' && selectedComment && canManageFeedback) {
+      if (action === 'accept') toggleReview(selectedComment, 'accepted')
+      if (action === 'reject') toggleReview(selectedComment, 'rejected')
+      if (action === 'done') handleToggleDone(selectedComment.id)
+    }
     setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
+  }, [view, selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return
