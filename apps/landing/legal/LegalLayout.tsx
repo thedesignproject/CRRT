@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { Wordmark } from '../components/Wordmark'
 import { Footer } from '../sections/Footer'
+import './legal.css'
 
 const linkStyle = {
   color: 'var(--crrt-white)',
@@ -30,7 +31,7 @@ export function LegalLayout({
   }, [title])
 
   return (
-    <div className="scanlines" style={{ minHeight: '100vh', background: 'var(--crrt-bg-deep)', color: 'var(--crrt-white)' }}>
+    <div className="scanlines legal-surface" style={{ minHeight: '100vh', background: 'var(--crrt-bg-deep)', color: 'var(--crrt-white)' }}>
       <header
         style={{
           borderBottom: '1px solid var(--crrt-rule-dark)',

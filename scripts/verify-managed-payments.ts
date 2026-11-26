@@ -65,7 +65,7 @@ try {
     const created = await checked(db.auth.admin.createUser({ email, password, email_confirm: true }))
     const id = created.data.user!.id
     users.push(id)
-    await checked(db.from('billing_accounts').insert({ user_id: id, is_legacy: legacy }))
+    await checked(db.from('billing_accounts').insert({ user_id: id, is_legacy: legacy, included_pro: legacy ? 'early_access' : null }))
     const auth = getNonPersistentSupabase()
     const signed = await checked(auth.auth.signInWithPassword({ email, password }))
     const token = signed.data.session!.access_token
@@ -123,8 +123,8 @@ try {
   const managed = await request(legacy.token, { action: 'portal' })
   assert.equal(managed.status, 200, 'Legacy portal configuration must be usable')
   assert.ok((await managed.json()).url.startsWith('https://billing.stripe.com/'))
-  const { data: row } = await checked(db.from('billing_accounts').select('is_legacy').eq('user_id', legacy.id).single())
-  assert.equal(row.is_legacy, true)
+  const { data: row } = await checked(db.from('billing_accounts').select('is_legacy,included_pro').eq('user_id', legacy.id).single())
+  assert.deepEqual(row, { is_legacy: true, included_pro: 'early_access' })
   console.log('PASS legacy: Pro blocked on both cycles; managed yearly Studio and restricted Portal available; legacy flag retained')
 
   const eventId = `evt_local_${run.replaceAll('-', '')}`
@@ -137,9 +137,10 @@ try {
   }
   const bad = await fetch(`${api}/webhook`, { method: 'POST', headers: { 'Stripe-Signature': signature }, body: payload + ' ' })
   assert.equal(bad.status, 400)
-  const { data: account } = await checked(db.from('billing_accounts').select('subscription_status,is_legacy').eq('user_id', legacy.id).single())
+  const { data: account } = await checked(db.from('billing_accounts').select('subscription_status,is_legacy,included_pro').eq('user_id', legacy.id).single())
   assert.equal(account.subscription_status, null, 'Webhook snapshot must not fabricate payment; reconcile real Stripe state')
   assert.equal(account.is_legacy, true)
+  assert.equal(account.included_pro, 'early_access')
   console.log('PASS local raw-body webhook: signature, duplicate delivery, tamper rejection, trusted reconciliation')
   console.log('Not exercised: hosted Checkout completion/renewal or Link app controls. Test purchases do not appear in Link.')
 } finally {

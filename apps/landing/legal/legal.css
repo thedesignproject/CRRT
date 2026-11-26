@@ -1,0 +1,12 @@
+/* Legal pages sit on a dark terminal surface in every landing theme, so they
+   pin the dark tokens that the wordmark, buttons and footer read. */
+.legal-surface {
+  --background: var(--crrt-bg-deep);
+  --foreground: #f8f5f2;
+  --muted-foreground: rgba(248, 245, 242, .62);
+  --card: var(--crrt-bg-deep-soft);
+  --muted: rgba(255, 255, 255, .08);
+  --border: rgba(255, 255, 255, .11);
+  --landing-page: var(--crrt-bg-deep);
+  color-scheme: dark;
+}

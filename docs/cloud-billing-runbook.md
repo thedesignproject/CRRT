@@ -127,3 +127,10 @@ Merge and deploy PR #339 (`0043_legacy_users.sql`) before this backend PR. Migra
 Signed-out pricing links use `GET /api/v1/billing?start=pro|studio&cycle=monthly|yearly`. This public route only signs the selected plan/cycle and redirects to the configured dashboard return URL. It never creates a customer or Checkout session and never accepts a client redirect. The state expires after 30 minutes, contains no account identity or payment authority, and is validated by authenticated `POST {action:"checkout_state",state}`. Direct authenticated Checkout also validates the cycle. Existing subscribers use Stripe Portal; direct plan changes remain disabled in the summary contract.
 
 Before rollout, configure all four distinct prices and the server-only signing secret in the intended environment. Test annual trial conversion, annual renewal/cancellation, monthly quota resets, plan/cycle sign-in continuation, tampered/expired state, and Checkout retry/cycle replacement. This branch does not configure Stripe, alter deployments, or apply migrations to any shared database.
+
+## Included Pro: early users and AppSumo
+
+`billing_accounts.included_pro` is the only thing that grants Cloud Pro without Stripe: `'early_access'`, `'appsumo'`, or null. `is_legacy` only records who was an early user; a check keeps every early user's `included_pro` set.
+
+- **AppSumo refund:** run `select revoke_appsumo_code('<code>');` as the service role. The code stays used, and the account returns to `'early_access'` if it is an early user, otherwise to no included plan. Codes redeemed before migration 0054 also set `is_legacy`, so for those buyers clear `included_pro` (and `is_legacy`, if they were not early users) by hand instead.
+- **Ending early access:** in a migration, drop the `billing_accounts_legacy_included_pro` check, then `update billing_accounts set included_pro = null where included_pro = 'early_access'`. AppSumo buyers keep Pro. Update `revoke_appsumo_code` at the same time, since it assumes early access is still running.
