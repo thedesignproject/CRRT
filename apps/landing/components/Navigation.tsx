@@ -1,6 +1,5 @@
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from '../../../src/design-system/theme'
-import { ResourcesMenu } from '../resources/ResourcesMenu'
 import { Wordmark } from './Wordmark'
 
 export const DASHBOARD_HREF = import.meta.env.DEV && !import.meta.env.SSR ? 'http://localhost:5173' : '/dashboard'
@@ -15,7 +14,6 @@ export function Navigation({ authenticated }: { authenticated: boolean }) {
       <div className="landing-navigation-links">
         <a className="ds-nav-link" href="/#how-it-works">How it works</a>
         <a className="ds-nav-link" href="/#pricing">Pricing</a>
-        <ResourcesMenu />
         <a className="ds-nav-link" href="/docs">Docs</a>
         <a className="ds-nav-link" href="https://github.com/thedesignproject/CRRT">GitHub</a>
       </div>
