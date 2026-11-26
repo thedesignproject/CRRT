@@ -29,6 +29,7 @@ import {
 } from '@crrt/ui/components/dropdown-menu'
 import { Ellipsis, MousePointer2 } from 'lucide-react'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
+import { mocksEnabled } from '../lib/mocks'
 
 const providerLabel = (provider: ExternalWorkProvider) =>
   provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'
@@ -215,7 +216,8 @@ export function CommentDetail({
   const [trackers, setTrackers] = useState<Record<ExternalWorkProvider, { connected: boolean }> | null>(null)
   useEffect(() => {
     setTrackers(null)
-    if (readOnly || !selectedProject) return
+    // The mock preview has no integrations API; unknown keeps the menu offering every tracker.
+    if (readOnly || !selectedProject || mocksEnabled) return
     let current = true
     getProjectTrackers(apiBase, accessToken, selectedProject).then((next) => { if (current) setTrackers(next) }, () => {})
     return () => { current = false }

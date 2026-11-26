@@ -11,6 +11,9 @@ vi.mock('../api', () => ({
   resolvePendingExternalWork: vi.fn(),
 }))
 
+const mockMode = vi.hoisted(() => ({ on: false }))
+vi.mock('../lib/mocks', async (original) => ({ ...(await original<object>()), get mocksEnabled() { return mockMode.on } }))
+
 import { getExternalWorkDraft, getProjectTrackers, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'
 import { mapServerComment } from '../lib/comment'
@@ -497,6 +500,15 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('GitHub lost access to this project.')
     fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }))
     expect(onOpenIntegrations).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the tracker check in the mock preview, which has no integrations API', () => {
+    mockMode.on = true
+    try {
+      vi.mocked(getProjectTrackers).mockClear()
+      render(<CommentDetail {...props} />)
+      expect(getProjectTrackers).not.toHaveBeenCalled()
+    } finally { mockMode.on = false }
   })
 
   it('offers to connect unconnected trackers from the menu, before sending', async () => {
