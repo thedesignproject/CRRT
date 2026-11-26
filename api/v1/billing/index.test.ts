@@ -132,3 +132,18 @@ it('passes only validated plan and cycle into direct checkout', async () => {
   expect((await call('POST', { action: 'checkout', plan: 'pro', cycle: 'weekly' })).statusCode).toBe(400)
   expect(checkout).not.toHaveBeenCalled()
 })
+
+it('redeems AppSumo codes for the session user only and maps failures', async () => {
+  const appsumo = await import('../../_lib/billing/appsumo.js')
+  const redeem = vi.spyOn(appsumo, 'redeemAppsumoCode')
+  redeem.mockResolvedValueOnce({ redeemed: true })
+  const ok = await call('POST', { action: 'redeem_appsumo', code: 'AS-1', userId: 'victim' })
+  expect(ok.statusCode).toBe(200); expect(ok.body).toEqual({ redeemed: true })
+  expect(redeem).toHaveBeenCalledWith(user.userId, 'AS-1'); expect(billingConfig).not.toHaveBeenCalled()
+  redeem.mockRejectedValueOnce(new appsumo.AppsumoRedemptionError(409, 'already_redeemed', 'That AppSumo code has already been redeemed.'))
+  expect(await call('POST', { action: 'redeem_appsumo', code: 'AS-1' })).toMatchObject({ statusCode: 409, body: { error: 'That AppSumo code has already been redeemed.' } })
+  redeem.mockRejectedValueOnce(new Error('boom'))
+  expect((await call('POST', { action: 'redeem_appsumo', code: 'AS-1' })).statusCode).toBe(503)
+  expect((await call('POST', { action: 'redeem_appsumo', code: 'AS-1' }, {})).statusCode).toBe(401)
+  redeem.mockRestore()
+})

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { beginBillingCheckout, getBillingAvailability, getBillingSummary, runBillingAction } from './api'
+import { beginBillingCheckout, getBillingAvailability, getBillingSummary, redeemAppsumoCode, runBillingAction } from './api'
 
 const fetchMock = vi.fn()
 const response = (body: unknown, ok = true) => ({ ok, status: ok ? 200 : 503, text: async () => JSON.stringify(body) })
@@ -40,9 +40,9 @@ it.each([
 ] as const)('maps legacy %s lifecycle safely', async (status, plan, lifecycle) => {
   fetchMock.mockResolvedValue(response({
     enabled: true,
-    entitlements: { isLegacy: status === 'legacy', plan, status, resetAt: null, usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 }, limits: { projects: null, internal_users: null, comments: null, product_audits: null } },
+    entitlements: { includedPro: status === 'legacy' ? 'early_access' : null, plan, status, resetAt: null, usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 }, limits: { projects: null, internal_users: null, comments: null, product_audits: null } },
   }))
-  expect(await getBillingSummary('/api', 'token')).toMatchObject({ lifecycle, isLegacy: status === 'legacy' })
+  expect(await getBillingSummary('/api', 'token')).toMatchObject({ lifecycle, includedPro: status === 'legacy' ? 'early_access' : null })
 })
 
 it('posts each closed billing action and keeps the legacy Pro shortcut', async () => {
@@ -77,4 +77,22 @@ it('retains annual billing prices and signed-handoff capabilities from the backe
   })
   await runBillingAction('/api', 'token', 'checkout', 'pro', undefined, 'yearly')
   expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({ action: 'checkout', plan: 'pro', cycle: 'yearly' })
+})
+
+it('maps AppSumo ownership and whether Stripe is still charging', async () => {
+  const entitlements = (status: string) => ({ isLegacy: true, includedPro: 'appsumo', plan: 'pro', status, resetAt: null, usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 }, limits: { projects: 10, internal_users: 10, comments: 2000, product_audits: 5 } })
+  fetchMock.mockResolvedValueOnce(response({ enabled: true, entitlements: entitlements('legacy') }))
+  expect(await getBillingSummary('/api', 'token')).toMatchObject({ includedPro: 'appsumo', paidSubscriptionActive: false, lifecycle: 'active', plan: 'pro' })
+  fetchMock.mockResolvedValueOnce(response({ enabled: true, entitlements: entitlements('trialing') }))
+  expect(await getBillingSummary('/api', 'token')).toMatchObject({ includedPro: 'appsumo', paidSubscriptionActive: true })
+})
+
+it('posts AppSumo codes with the session and surfaces server errors', async () => {
+  fetchMock.mockResolvedValueOnce(response({ redeemed: true }))
+  expect(await redeemAppsumoCode('/api', 'token', 'AS-1')).toEqual({ redeemed: true })
+  expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/billing')
+  expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST', headers: { Authorization: 'Bearer token' } })
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ action: 'redeem_appsumo', code: 'AS-1' })
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 409, text: async () => JSON.stringify({ error: 'That AppSumo code has already been redeemed.' }) })
+  await expect(redeemAppsumoCode('/api', 'token', 'AS-1')).rejects.toThrow('already been redeemed')
 })

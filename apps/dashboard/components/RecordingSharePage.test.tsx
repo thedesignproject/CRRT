@@ -130,21 +130,42 @@ it('opens anonymous share state without sending an owner token, and seeks transc
   view.unmount(); expect(document.querySelector('meta[name=referrer]')).toBeNull()
 })
 it('shows early links and failed processing without requiring playable artifacts', async () => {
-  mocks.request.mockResolvedValue({ ...state(false), recording: { title: '', state: 'failed', failure: { retryable: true } }, stages: [{ stage: 'metadata', state: 'failed', failure: { retryable: true } }] })
+  mocks.request.mockResolvedValue({ ...state(false), recording: { title: '', state: 'failed', failure: { code: 'record_artifact_mismatch', retryable: false } }, stages: [{ stage: 'metadata', state: 'failed', failure: { code: 'record_artifact_mismatch', retryable: false } }] })
   render(<RecordingSharePage apiBase="/api" />)
-  expect(await screen.findByText('We couldn’t prepare your video.')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Retry video' })).toBeNull()
-  expect(screen.getByText(/Playback will appear/)).toBeInTheDocument()
+  expect(await screen.findByText('The uploaded video couldn’t be verified, so it can’t be played.')).toBeInTheDocument()
+  expect(screen.queryByText('We couldn’t verify the uploaded video.')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Retry screenshots' })).toBeNull()
+  expect(screen.getByText('Processing failed')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /Narration/ }))
   fireEvent.click(within(screen.getByRole('region', { name: 'Timeline marks' })).getAllByRole('button')[0])
 })
 
+it.each([
+  ['pending', 'processing', 'Preparing recording details…'], ['running', 'processing', 'Preparing recording details…'],
+  ['done', 'ready', null], ['failed', 'failed', 'Some extras couldn’t be prepared'],
+])('plays the original video for owners and shared viewers while metadata is %s', async (stageState, recordingState, label) => {
+  for (const owner of [false, true]) {
+    history.replaceState(null, '', owner ? '/dashboard/recording?id=owned' : '/dashboard/recording#capability')
+    const value = state()
+    mocks.request.mockResolvedValue({ ...value, recording: { ...value.recording, state: recordingState }, keyframes: stageState === 'done' ? value.keyframes : [],
+      stages: [{ stage: 'metadata', state: stageState, failure: stageState === 'failed' ? { stage: 'metadata', retryable: true } : null }] })
+    const view = render(<RecordingSharePage apiBase="/api" ownerToken={owner ? 'owner-token' : undefined} />)
+    await screen.findByText('Wikipedia capture')
+    await waitFor(() => expect(document.querySelector('video')).toHaveAttribute('src', 'https://storage.test/screen?token=scoped'))
+    expect(screen.getByRole('group', { name: 'Playback controls' })).toBeInTheDocument()
+    if (label) expect(screen.getByText(label)).toBeInTheDocument()
+    else expect(document.querySelector('.recording-status')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry screenshots' }) !== null).toBe(owner && stageState === 'failed')
+    view.unmount()
+  }
+})
+
 it.each(['metadata', 'transcription'])('retries only the owner’s failed %s stage without removing available playback', async stage => {
   history.replaceState(null, '', '/dashboard/recording?id=owned')
-  const value = { ...state(stage === 'transcription'), transcript: [], stages: [{ stage, state: 'failed', failure: { stage, retryable: true } }] }
+  const value = { ...state(), transcript: [], stages: [{ stage, state: 'failed', failure: { stage, retryable: true } }] }
   mocks.request.mockResolvedValue(value)
   render(<RecordingSharePage apiBase="/api" ownerToken="owner-token" />)
-  const label = stage === 'transcription' ? 'Retry transcription' : 'Retry video'
+  const label = stage === 'transcription' ? 'Retry transcription' : 'Retry screenshots'
   const button = await screen.findByRole('button', { name: label })
   const video = document.querySelector('video')
   let resolve!: () => void
@@ -155,7 +176,7 @@ it.each(['metadata', 'transcription'])('retries only the owner’s failed %s sta
   await act(async () => resolve())
   expect(screen.queryByRole('button', { name: label })).toBeNull()
   expect(document.querySelector('video')).toBe(video)
-  if (stage === 'transcription') expect(video).toBeInTheDocument()
+  expect(video).toBeInTheDocument()
 })
 
 it('keeps derived frames readable before primary playback becomes available', async () => {
@@ -163,6 +184,7 @@ it('keeps derived frames readable before primary playback becomes available', as
   render(<RecordingSharePage apiBase="/api" />)
   fireEvent.click(await screen.findByRole('button', { name: /Keyframe at 5 seconds/ }))
   expect(document.querySelector('video')).toBeNull()
+  expect(screen.getByText('Playback will appear as soon as the upload finishes.')).toBeInTheDocument()
 })
 it('uses bearer authentication for private library playback, with no face track required', async () => {
   history.replaceState(null, '', '/dashboard/recording?id=owner-recording')

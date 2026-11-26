@@ -99,7 +99,7 @@ integration('annual subscriptions with monthly usage windows', () => {
       await sql!.begin(async tx => {
         await tx`update cloud_plan_settings set enabled=false`
         await tx`insert into auth.users(id,email) values(${owner},${owner+'@test.local'})`
-        await tx`insert into billing_accounts(user_id,is_legacy) values(${owner},true)`
+        await tx`insert into billing_accounts(user_id,is_legacy,included_pro) values(${owner},true,'early_access')`
         await tx`update cloud_plan_settings set enabled=true`
         const summary = async () => (await tx`select cloud_entitlements(${owner}) as value`)[0].value
         expect(await summary()).toMatchObject({ isLegacy: true, plan: 'pro', status: 'legacy', canWrite: true })

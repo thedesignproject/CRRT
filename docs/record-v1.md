@@ -123,7 +123,7 @@ offers stage retry and server-authorized paid context generation.
 
 Both the dashboard owner player and extension review show stage-specific recovery.
 The worker's existing automatic retries run first (up to three attempts per stage).
-Only a retryable stage in `failed` state exposes a manual action: Retry video,
+Only a retryable stage in `failed` state exposes a manual action: Retry screenshots,
 Retry transcription, or Retry key moments. Public viewers see the status without
 owner actions. Retrying preserves playback, transcript data and successful stages;
 only the selected failed stage is queued again. Request errors retain the retry
@@ -133,7 +133,7 @@ The dashboard and extension library list actual owner recordings. The dashboard
 serves anonymous human playback at `/dashboard/recording#<capability>` and
 authenticated library playback at `/dashboard/recording?id=<recording UUID>`.
 Share capabilities stay in fragments, rather than HTTP page URLs/referrers.
-Early links show processing state; verified playback uses expiring private URLs,
+Early links show processing state; playback of finalized uploads uses expiring private URLs,
 with transcript/mark/keyframe seeking and an optional synchronized camera track.
 Private library playback stays inside the dashboard navigation and links back to
 Recordings; anonymous share playback remains standalone. Tab captures include the
@@ -164,8 +164,11 @@ Storage's bucket cap is exactly 1 GiB. Because its signature does not bind decla
 length, authorization reserves that maximum until immutable completion verifies
 actual size/type. Finalization reserves a bounded derivation budget; successful
 processing replaces it with actual derived bytes. Provisioning must preserve
-that private bucket and its object cap. Workers verify source SHA-256 before use;
-playback is withheld until source verification/media derivation succeeds.
+that private bucket and its object cap. Workers verify source SHA-256 before use.
+Owner and shared playback of the original sources starts once finalize confirms
+every upload completed; thumbnails, screenshots and transcripts appear as their
+stages finish. Other processing failures leave the original playable. Until metadata has verified
+every source, a checksum mismatch found by any worker stage withdraws playback again.
 
 Errors are `{error:{code,retryable}}` for Record failures: `record_invalid` (400),
 `record_payload_too_large` (413), `record_not_found` (404, including cross-owner),
