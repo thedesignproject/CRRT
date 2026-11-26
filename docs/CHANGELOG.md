@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Comment pins stay on their spot while scrolling on iPhone Safari, including when the keyboard or toolbar moves the visible area. Previously pins drifted and then snapped back.
+- Touch screens show an Exit button while comment mode is on, so you can leave it without a keyboard. It works like Escape and C, and keeps comments you already sent.
+
 ## [0.3.27] - Unreleased
 
 ### Fixed

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { fromPagePercent, fromPagePercentFixed, toPagePercent } from '../components/FeedbackWidget/coords'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { clientToPage, fromPagePercent, fromPagePercentFixed, pageToFixed, toPagePercent } from '../components/FeedbackWidget/coords'
 
 describe('coords', () => {
   let originalScrollWidth: PropertyDescriptor | undefined
@@ -17,6 +17,7 @@ describe('coords', () => {
   afterEach(() => {
     if (originalScrollWidth) Object.defineProperty(document.documentElement, 'scrollWidth', originalScrollWidth)
     if (originalScrollHeight) Object.defineProperty(document.documentElement, 'scrollHeight', originalScrollHeight)
+    vi.unstubAllGlobals()
   })
 
   it('toPagePercent converts pixels to percent of document', () => {
@@ -37,5 +38,22 @@ describe('coords', () => {
     window.scrollX = 100
     window.scrollY = 200
     expect(fromPagePercentFixed(50, 50)).toEqual({ fixedX: 400, fixedY: 800 })
+  })
+
+  it('clientToPage and pageToFixed are inverse conversions through window scroll', () => {
+    window.scrollX = 30
+    window.scrollY = 400
+    expect(clientToPage(10, 20)).toEqual({ pageX: 40, pageY: 420 })
+    expect(pageToFixed(40, 420)).toEqual({ fixedX: 10, fixedY: 20 })
+  })
+
+  it('uses the layout viewport origin when the visual viewport is offset (iOS keyboard, zoom)', () => {
+    // iOS Safari reports window.scroll* for the visual viewport.
+    window.scrollX = 25
+    window.scrollY = 400
+    vi.stubGlobal('visualViewport', { pageLeft: 25, pageTop: 400, offsetLeft: 5, offsetTop: 150 })
+    expect(clientToPage(10, 20)).toEqual({ pageX: 30, pageY: 270 })
+    expect(pageToFixed(30, 270)).toEqual({ fixedX: 10, fixedY: 20 })
+    expect(fromPagePercentFixed(50, 50)).toEqual({ fixedX: 480, fixedY: 750 })
   })
 })

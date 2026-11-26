@@ -9,14 +9,14 @@ import { samePage } from '../../lib/pageIdentity'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
-import { fromPagePercentFixed, toPagePercent } from './coords'
+import { clientToPage, fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { deleteComment as apiDeleteComment, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { ensureWidgetFonts } from './fonts'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
-import { SelectingInstructionBar } from './selecting'
+import { SelectingInstructionBar, TouchExitButton } from './selecting'
 import { TextRangeQuote } from './quote'
 import { listenForWidgetEvent } from './events'
 import { SpeechInputButton } from './voice'
@@ -37,9 +37,8 @@ function getElementFixedPos(
     if (!el) return null
     const rect = (el as HTMLElement).getBoundingClientRect()
     if (rect.width === 0 && rect.height === 0) return null
-    const pageX = (xPct / 100) * document.documentElement.scrollWidth
-    const pageY = (yPct / 100) * document.documentElement.scrollHeight
-    return { left: pageX - window.scrollX, top: pageY - window.scrollY }
+    const { fixedX, fixedY } = fromPagePercentFixed(xPct, yPct)
+    return { left: fixedX, top: fixedY }
   } catch {
     return null
   }
@@ -468,6 +467,8 @@ function FeedbackWidgetInner({
 
   // Pins/popovers use position:fixed, so their viewport coords must be recomputed
   // on scroll (and on resize / body reflow, which shift the page-percent mapping).
+  // On iOS the visual viewport moves without a window scroll (keyboard, toolbar,
+  // zoom) and an orientation change reflows the page, so listen for those too.
   // RAF-coalesced and gated by needsPositionSyncRef so idle pages stay cheap.
   const [, forceUpdate] = useState(0)
   const needsPositionSyncRef = useRef(false)
@@ -479,10 +480,11 @@ function FeedbackWidgetInner({
       raf = requestAnimationFrame(() => forceUpdate(n => n + 1))
     }
 
-    function onResize() {
-      bump()
-    }
-    window.addEventListener('resize', onResize)
+    const visualViewport = window.visualViewport
+    window.addEventListener('resize', bump, { passive: true })
+    window.addEventListener('orientationchange', bump, { passive: true })
+    visualViewport?.addEventListener('resize', bump, { passive: true })
+    visualViewport?.addEventListener('scroll', bump, { passive: true })
     // Capture phase + document target catches scroll on any nested scrollable
     // container (dashboards with internal overflow:auto panels). Bubble-phase
     // listeners on window miss those because scroll events don't bubble.
@@ -493,7 +495,10 @@ function FeedbackWidgetInner({
 
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener('resize', onResize)
+      window.removeEventListener('resize', bump)
+      window.removeEventListener('orientationchange', bump)
+      visualViewport?.removeEventListener('resize', bump)
+      visualViewport?.removeEventListener('scroll', bump)
       document.removeEventListener('scroll', bump, { capture: true })
       ro.disconnect()
     }
@@ -697,10 +702,8 @@ function FeedbackWidgetInner({
         })
         if (built) {
           if (conversation?.onTextSelection?.(sel.getRangeAt(0)) === false) return
-          const pct = toPagePercent(
-            built.midpointClient.x + window.scrollX,
-            built.midpointClient.y + window.scrollY,
-          )
+          const midpoint = clientToPage(built.midpointClient.x, built.midpointClient.y)
+          const pct = toPagePercent(midpoint.pageX, midpoint.pageY)
           const selectedTarget: ClickTarget = {
             selector: built.anchor.containerSelector,
             x: pct.x,
@@ -896,7 +899,7 @@ function FeedbackWidgetInner({
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
-          if (conversation && comment) { clearNativeSelection(); setMode('idle'); return }
+          if (conversation && comment) { exitCommentMode(); return }
           clearNativeSelection()
           conversation?.onClearSelection()
           setTarget(null)
@@ -950,6 +953,13 @@ function FeedbackWidgetInner({
     }
     return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
   }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment, externalWork, externalProviderCommentId])
+
+  // The Escape/C exit, shared with the touch Exit button. A hosted draft only
+  // exists in the composer; it is parked (back to idle) and kept, as Escape did.
+  function exitCommentMode() {
+    if (conversation && comment) { clearNativeSelection(); setMode('idle'); return }
+    exitFeedbackMode()
+  }
 
   function exitFeedbackMode() {
     if (conversation && comment) { setMode('commenting'); return }
@@ -1223,6 +1233,7 @@ function FeedbackWidgetInner({
       {mode === 'selecting' && showSelectingHint && (
         <SelectingInstructionBar onCancel={exitFeedbackMode} />
       )}
+      {mode !== 'idle' && !sidebarOpen && !showNameModal && !agentOpen && <TouchExitButton onExit={exitCommentMode} />}
       {mode === 'selecting' && !showSelectingHint && postSendHint && (
         <SelectingInstructionBar
           message="Saved. Drop another or review comments."

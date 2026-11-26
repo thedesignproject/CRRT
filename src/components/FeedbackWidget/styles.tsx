@@ -262,6 +262,10 @@ export function FeedbackWidgetStyles() {
           80%  { opacity: 0;    transform: translate(-50%, -50%) scale(3.2); }
           100% { opacity: 0;    transform: translate(-50%, -50%) scale(3.2); }
         }
+        [data-fw-crrt] .fw-touch-exit { display: none; top: calc(12px + env(safe-area-inset-top, 0px)); }
+        @media (any-pointer: coarse) {
+          [data-fw-crrt] .fw-touch-exit { display: inline-flex; }
+        }
         @media (prefers-reduced-motion: reduce) {
           [data-fw-crrt] * {
             animation-duration: 0.01ms !important;
