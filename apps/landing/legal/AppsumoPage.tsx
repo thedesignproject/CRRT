@@ -25,28 +25,42 @@ export function scopeTokens(css: string, scope: string) {
 const STUDIO_TOKENS = scopeTokens(studioTokens, '.studio-page')
 
 const LIMITS = [
-  ['10', 'projects'],
-  ['10', 'collaborators'],
-  ['2,000', 'comments a month'],
-  ['5', 'audits a month'],
+  { value: '10', label: 'Projects' },
+  { value: '10', label: 'Collaborators' },
+  { value: '2,000', label: 'Comments', unit: '/mo' },
+  { value: '5', label: 'Audits', unit: '/mo' },
 ] as const
+
+const INCLUDED = ['Every Cloud Pro feature', 'No card and no renewal']
 
 function DealCard() {
   return (
     <aside className="studio-card studio-deal" aria-labelledby="appsumo-deal-title">
       <div className="studio-deal-head">
-        <h2 id="appsumo-deal-title">Cloud Pro</h2>
-        <span className="studio-chip">Lifetime</span>
+        <img src="/favicon.png" alt="" width={40} height={40} className="studio-logo" />
+        <div>
+          <h2 id="appsumo-deal-title">Cloud Pro</h2>
+          <p className="studio-deal-sub">AppSumo lifetime deal</p>
+        </div>
+        <span className="studio-chip"><span aria-hidden="true" />Lifetime</span>
       </div>
       <dl>
-        {LIMITS.map(([value, label]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
+        {LIMITS.map((limit) => (
+          <div key={limit.label}>
+            <dt>{limit.label}{'unit' in limit && <span className="studio-sr"> a month</span>}</dt>
+            <dd>{limit.value}{'unit' in limit && <span className="studio-deal-unit" aria-hidden="true">{limit.unit}</span>}</dd>
           </div>
         ))}
       </dl>
-      <p>Shows as <span className="studio-mono">AppSumo lifetime · Cloud Pro</span> in Billing.</p>
+      <ul className="studio-deal-included">
+        {INCLUDED.map((item) => (
+          <li key={item}>
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.5 5.75 10 11 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {item}
+          </li>
+        ))}
+      </ul>
+      <p className="studio-deal-foot">Shows as <span className="studio-mono">AppSumo lifetime · Cloud Pro</span> in Billing.</p>
     </aside>
   )
 }

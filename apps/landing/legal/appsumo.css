@@ -38,15 +38,24 @@
 .studio-meta { margin: 16px 0 0; color: var(--text-subtle); font: 400 12px/1.4 var(--font-mono); }
 
 .studio-card { border-radius: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
-.studio-deal { margin: 0; padding: 24px; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border), var(--shadow-panel); }
-.studio-deal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
-.studio-deal-head h2 { margin: 0; color: var(--text-strong); font: 600 17px/1.2 var(--font-body); letter-spacing: -.01em; }
-.studio-chip { padding: 4px 8px; border-radius: 6px; background: var(--status-fixed-bg); color: var(--status-fixed-fg); font: 500 12px/1 var(--font-mono); }
-.studio-deal dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; margin: 20px 0 0; }
-.studio-deal dl div { display: flex; flex-direction: column-reverse; gap: 4px; }
-.studio-deal dd { margin: 0; color: var(--text-strong); font: 500 28px/1 var(--font-mono); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-.studio-deal dt { color: var(--text-subtle); font-size: 13px; }
-.studio-deal p { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-subtle); font-size: 13px; }
+.studio-deal { position: relative; margin: 0; padding: 0; overflow: hidden; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--border), var(--shadow-panel); }
+.studio-deal::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px; background: linear-gradient(90deg, transparent, var(--carrot-line), transparent); }
+.studio-deal-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 22px 24px; }
+.studio-deal-head h2 { margin: 0; color: var(--text-strong); font: 600 19px/1.2 var(--font-body); letter-spacing: -.015em; }
+.studio-deal-sub { margin: 3px 0 0; color: var(--text-subtle); font: 400 12px/1.3 var(--font-mono); }
+.studio-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; background: var(--status-fixed-bg); color: var(--status-fixed-fg); font: 500 12px/1 var(--font-mono); }
+.studio-chip span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.studio-deal dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--border); border-block: 1px solid var(--border); }
+.studio-deal dl div { display: flex; flex-direction: column-reverse; gap: 8px; padding: 18px 24px; background: var(--surface-2); }
+.studio-deal dd { margin: 0; color: var(--text-strong); font: 500 30px/1 var(--font-mono); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.studio-deal-unit { margin-left: 3px; color: var(--text-subtle); font-size: 14px; letter-spacing: 0; }
+.studio-deal dt { color: var(--text-subtle); font: 500 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.studio-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.studio-deal-included { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 18px 24px 0; list-style: none; color: var(--text-body); font-size: 13px; }
+.studio-deal-included li { display: inline-flex; align-items: center; gap: 7px; }
+.studio-deal-included svg { color: var(--leaf); flex-shrink: 0; }
+.studio-deal-foot { margin: 0; padding: 14px 24px 20px; color: var(--text-subtle); font-size: 12px; }
+.studio-deal-foot .studio-mono { font-size: 11.5px; color: var(--text-body); }
 
 .studio-section { padding: clamp(40px, 6vw, 64px) 0; border-top: 1px solid var(--border); }
 .studio-section-title { margin: 0 0 24px; color: var(--text-strong); font: 600 22px/1.2 var(--font-body); letter-spacing: -.02em; }
@@ -85,6 +94,7 @@
   .studio-actions .studio-button { width: 100%; }
   .studio-nav > a:not(.studio-button) { display: none; }
   .studio-deal dd { font-size: 24px; }
+  .studio-deal-head, .studio-deal dl div, .studio-deal-included, .studio-deal-foot { padding-inline: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .studio-button { transition: none; }
