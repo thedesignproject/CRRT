@@ -15,8 +15,8 @@ integration('legacy billing transactional fences with quotas disabled', () => {
   async function fixture(legacy = false) {
     const owner = randomUUID(), comment = randomUUID(), project = 'legacy-race-'+randomUUID()
     await sql!`insert into auth.users(id,email) values (${owner},${owner+'@example.com'})`
-    await sql!`insert into billing_accounts(user_id,is_legacy,plan,price_id,subscription_status,period_start,period_end)
-      values (${owner},${legacy},'pro','price_pro','active',now()-interval '1 day',now()+interval '29 days')`
+    await sql!`insert into billing_accounts(user_id,is_legacy,included_pro,plan,price_id,subscription_status,period_start,period_end)
+      values (${owner},${legacy},${legacy ? 'early_access' : null},'pro','price_pro','active',now()-interval '1 day',now()+interval '29 days')`
     await sql!`select claim_project(${owner},${project},'Race test')`
     await sql!`insert into comments(id,project_id,url,x,y,element,comment,created_by,status)
       values (${comment},${project},'https://example.com',0,0,'body','Approved','widget','approved')`
@@ -84,7 +84,7 @@ integration('legacy billing transactional fences with quotas disabled', () => {
   it('preserves Stripe history committed while user deletion waits on the billing row', async () => {
     const owner = randomUUID(), customer = 'cus_'+randomUUID()
     await sql!`insert into auth.users(id,email) values (${owner},${owner+'@example.com'})`
-    await sql!`insert into billing_accounts(user_id,is_legacy) values (${owner},true)`
+    await sql!`insert into billing_accounts(user_id,is_legacy,included_pro) values (${owner},true,'early_access')`
     const billing = await sql!.reserve(), deletion = await sql!.reserve()
     let pending: Promise<unknown> | undefined
     try {

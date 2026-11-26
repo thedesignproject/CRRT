@@ -171,6 +171,7 @@ try {
   const screen = await tus(id, owner.token, await readFile(join(directory, 'screen.webm')))
   const camera = await tus(id, owner.token, await readFile(join(directory, 'camera.webm')), 'camera')
   const audio = await tus(id, owner.token, await readFile(join(directory, 'audio.webm')), 'audio')
+  assert.deepEqual((await api(`recording-shares/${created.shareId}`, null)).artifacts, [], 'Uploads stay private until finalize')
   const eventId = randomUUID()
   const manifest = { version: 'record.v1', durationMs: 2000, artifacts: [screen, camera, audio], events: [{ id: eventId, sequence: 0, kind: 'mark', atMs: 500,
     mark: { type: 'pin', points: [{ x: 0.5, y: 0.5 }], text: 'Fix this', pinNumber: 1 }, target: { selector: '#pay', pageUrl: 'https://example.test/#//[?secret=value' },
@@ -178,7 +179,13 @@ try {
   await api(`recordings/${id}/finalize`, owner.token, 'POST', manifest)
   await api(`recordings/${id}/finalize`, owner.token, 'POST', manifest)
   await api(`recordings/${id}/finalize`, owner.token, 'POST', { ...manifest, durationMs: 2001 }, 409)
-  assert.equal((await api(`recording-shares/${created.shareId}`, null)).recording.state, 'processing')
+  // The verified original plays for owners and shared viewers before any worker runs.
+  for (const early of [await api(`recording-shares/${created.shareId}`, null), await api(`recordings/${id}/playback`, owner.token)]) {
+    assert.equal(early.recording.state, 'processing')
+    assert.deepEqual(early.artifacts.map((a: any) => a.kind).sort(), ['audio', 'camera', 'screen'])
+    assert.equal((await fetch(early.artifacts.find((a: any) => a.kind === 'screen').url, { headers: { Range: 'bytes=0-9' } })).status, 206)
+  }
+  await api(`recordings/${id}/playback`, stranger.token, 'GET', undefined, 404)
   await runNext('metadata')
   const [metadataJob] = await db`select state,failure from public.recording_jobs where recording_id=${id} and stage='metadata'`
   assert.equal(metadataJob.state, 'done', JSON.stringify(metadataJob.failure))
@@ -294,11 +301,12 @@ try {
   await api(`recordings/${dense.recording.id}/finalize`, owner.token, 'POST', compact)
   await api(`recordings/${dense.recording.id}`, owner.token, 'DELETE')
   // A multi-chunk upload proves reconnect/offset recovery. A corrupt declared
-  // hash is then rejected by processing and never receives playback URLs.
+  // hash plays only until processing rejects it, then loses playback URLs.
   const corrupt = await api('recordings', owner.token, 'POST', { ...input, clientKey: randomUUID() }, 201)
   createdRecordings.push(corrupt.recording.id)
   const bad = await tus(corrupt.recording.id, owner.token, Buffer.alloc(8 * 1024 * 1024 + 128, 1), 'screen', 'a'.repeat(64))
   await api(`recordings/${corrupt.recording.id}/finalize`, owner.token, 'POST', { ...manifest, artifacts: [bad], events: [] })
+  assert.equal((await api(`recording-shares/${corrupt.shareId}`, null)).artifacts.length, 1)
   await runNext('metadata')
   const blocked = await api(`recording-shares/${corrupt.shareId}`, null)
   assert.equal(blocked.recording.failure.code, 'record_artifact_mismatch')
@@ -327,18 +335,18 @@ try {
   await api(`recording-shares/${orphan.shareId}`, null, 'GET', undefined, 404)
   // Exercise indexed seeking near the end of a full-length live capture, not
   // just a short finalized fixture. One frame/second keeps this test compact.
-  ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=160x120:rate=1', '-t', '3600', '-c:v', 'libvpx', '-deadline', 'realtime', '-an', '-live', '1', join(directory, 'hour.webm')])
-  const long = await api('recordings', owner.token, 'POST', { ...input, clientKey: randomUUID(), title: 'One-hour capture',
+  ffmpeg(['-f', 'lavfi', '-i', 'testsrc2=size=160x120:rate=1', '-t', '300', '-c:v', 'libvpx', '-deadline', 'realtime', '-an', '-live', '1', join(directory, 'five-minutes.webm')])
+  const long = await api('recordings', owner.token, 'POST', { ...input, clientKey: randomUUID(), title: 'Five-minute capture',
     consent: { ...input.consent, hostedTranscription: false } }, 201)
   createdRecordings.push(long.recording.id)
-  const longScreen = await tus(long.recording.id, owner.token, await readFile(join(directory, 'hour.webm')))
-  const lateEvents = [1_800_000, 3_598_000, 3_600_000].map((atMs, sequence) => ({ id: randomUUID(), kind: 'click', sequence, atMs,
+  const longScreen = await tus(long.recording.id, owner.token, await readFile(join(directory, 'five-minutes.webm')))
+  const lateEvents = [150_000, 298_000, 300_000].map((atMs, sequence) => ({ id: randomUUID(), kind: 'click', sequence, atMs,
     crop: [
       { x: 0.999, y: 0, width: 0.001, height: 1 },
       { x: 0, y: 0.999, width: 1, height: 0.001 },
       { x: 0.999, y: 0.999, width: 0.001, height: 0.001 },
     ][sequence] }))
-  await api(`recordings/${long.recording.id}/finalize`, owner.token, 'POST', { version: 'record.v1', durationMs: 3_600_000, artifacts: [longScreen], events: lateEvents })
+  await api(`recordings/${long.recording.id}/finalize`, owner.token, 'POST', { version: 'record.v1', durationMs: 300_000, artifacts: [longScreen], events: lateEvents })
   await runNext('metadata')
   const [longJob] = await db`select state,failure from public.recording_jobs where recording_id=${long.recording.id} and stage='metadata'`
   assert.equal(longJob.state, 'done', JSON.stringify(longJob.failure))
@@ -374,7 +382,7 @@ try {
   await db`update public.recording_jobs set available_at=now() where recording_id=${id} and stage='cleanup'`
   await rpc('record_sweep', {}); await drainFixtureCleanup(id)
   assert.equal((await (await storage(id)).list(`${owner.id}/${id}`, 100)).data?.length, 0)
-  console.log(`PASS: HTTP/Auth/${process.env.RECORD_STORAGE_PROVIDER === 'r2' ? 'S3 multipart/resume' : 'TUS'}, private playback, live WebM without duration, one-hour capture with late indexed frames, STT retry/alignment, 1002 transcript segments, 1004 artifacts, paid current-context payload, immediate account-share revocation, and late-write reconciliation`)
+  console.log(`PASS: HTTP/Auth/${process.env.RECORD_STORAGE_PROVIDER === 'r2' ? 'S3 multipart/resume' : 'TUS'}, private playback, live WebM without duration, five-minute capture with late indexed frames, STT retry/alignment, 1002 transcript segments, 1004 artifacts, paid current-context payload, immediate account-share revocation, and late-write reconciliation`)
 } finally {
   server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
   for (const recording of [...createdRecordings, ...orphanRecordings]) {

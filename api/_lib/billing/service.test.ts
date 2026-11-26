@@ -337,13 +337,13 @@ it('preserves the same attempt when delayed first creation is below Stripe minim
 })
 it('prevents charging legacy users for included Pro and allows a Studio upgrade',async()=>{
  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud');vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
- account.is_legacy=true
+ account.included_pro='early_access'
  sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?5400:1800,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
- await expect(checkout(user,'pro')).rejects.toThrow('included for legacy users')
+ await expect(checkout(user,'pro')).rejects.toThrow('already included with your account')
  expect(sdk.customers.create).not.toHaveBeenCalled();expect(sdk.checkout.sessions.create).not.toHaveBeenCalled()
  await checkout(user,'studio')
  expect(sdk.checkout.sessions.create.mock.lastCall![0].line_items).toEqual([{price:'price_studio',quantity:1}])
- expect(save.mock.calls.every(([values])=>!Object.prototype.hasOwnProperty.call(values,'is_legacy'))).toBe(true)
+ expect(save.mock.calls.every(([values])=>!Object.prototype.hasOwnProperty.call(values,'included_pro'))).toBe(true)
 })
 
 const legacyPortalSettings = {
@@ -354,7 +354,7 @@ function legacyPortalSetup() {
  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
  vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
  vi.stubEnv('STRIPE_LEGACY_PORTAL_CONFIGURATION_ID','bpc_legacy')
- account.is_legacy=true;account.customer_id='cus'
+ account.included_pro='early_access';account.customer_id='cus'
  sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?5400:1800,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
  sdk.billingPortal.configurations.retrieve.mockResolvedValue(legacyPortalSettings)
 }
@@ -396,7 +396,7 @@ it.each([
  expect(sdk.billingPortal.sessions.create).not.toHaveBeenCalled()
 })
 it('preserves the default portal for nonlegacy Cloud customers',async()=>{
- legacyPortalSetup();account.is_legacy=false
+ legacyPortalSetup();account.included_pro=null
  await portal(user.userId)
  expect(sdk.billingPortal.configurations.retrieve).not.toHaveBeenCalled()
  expect(sdk.billingPortal.sessions.create).toHaveBeenCalledWith({customer:'cus',return_url:'https://preview.example/dashboard/'})
@@ -487,7 +487,7 @@ it('offers the trial only to Cloud accounts that can still start one', async () 
   expect(await trialAvailable(user.userId)).toBe(true)
   for (const [values, expected] of [
     [{}, true], [{ subscription_status: 'canceled' }, true], [{ subscription_status: 'incomplete_expired' }, true],
-    [{ trial_used: true }, false], [{ is_legacy: true }, false], [{ subscription_status: 'active' }, false], [{ subscription_status: 'trialing' }, false],
+    [{ trial_used: true }, false], [{ included_pro: 'early_access' }, false], [{ subscription_status: 'active' }, false], [{ subscription_status: 'trialing' }, false],
   ] as const) {
     vi.mocked(getAccount).mockResolvedValueOnce({ ...account, ...values })
     expect(await trialAvailable(user.userId)).toBe(expected)

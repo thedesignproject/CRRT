@@ -108,9 +108,9 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
         <span><Monitor size={14} aria-hidden="true" />{{ tab: 'Browser tab', window: 'Window', screen: 'Entire screen' }[playback.recording.source]}</span>
         <span><Film size={14} aria-hidden="true" />{playback.events.length} {playback.events.length === 1 ? 'moment' : 'moments'}</span>
         {ownerToken && <span><LockKeyhole size={14} aria-hidden="true" />Your recording</span>}
-        {playback.recording.state !== 'ready' && <span className="recording-status" data-state={playback.recording.state}>{{ recording: 'Recording in progress', uploading: 'Uploading video…', processing: 'Processing recording…', failed: 'Processing failed' }[playback.recording.state]}</span>}
+        {playback.recording.state !== 'ready' && <span className="recording-status" data-state={playback.recording.state}>{{ recording: 'Recording in progress', uploading: 'Uploading video…', processing: 'Preparing recording details…', failed: screen ? 'Some extras couldn’t be prepared' : 'Processing failed' }[playback.recording.state]}</span>}
       </div>
-      <RecordingRecovery stages={playback.stages.filter(job => job.stage !== 'transcription')} retry={ownerToken ? retry : undefined} />
+      <RecordingRecovery stages={playback.stages.filter(job => job.stage !== 'transcription' && (screen || job.stage !== 'metadata'))} retry={ownerToken ? retry : undefined} />
       <div className="recording-detail-grid"><div className="recording-detail-main">
       {screen ? <div ref={composition} className="recording-composed-player recording-player">
         <div className="recording-player-stage" style={{ maxWidth: fullscreen ? `calc((100dvh - 8rem) * ${videoAspect})` : `calc(65dvh * ${videoAspect})` }}>
@@ -135,7 +135,7 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
         </div>
         {fullscreenError && <p role="alert" className="recording-player-error">{fullscreenError}</p>}
         {mediaError && <p role="alert" className="recording-player-error">{mediaError}</p>}
-      </div> : <div className="recording-playback-pending"><Film size={32} strokeWidth={1.5} aria-hidden="true" /><h2>{playback.recording.state === 'failed' ? 'Your video is not ready' : 'Your recording is being prepared'}</h2><p>Playback will appear when uploading and video preparation finish.</p></div>}
+      </div> : <div className="recording-playback-pending"><Film size={32} strokeWidth={1.5} aria-hidden="true" /><h2>{playback.recording.state === 'failed' ? 'Your video is not ready' : 'Your recording is being prepared'}</h2><p>{playback.recording.state === 'failed' ? 'The uploaded video couldn’t be verified, so it can’t be played.' : 'Playback will appear as soon as the upload finishes.'}</p></div>}
       <section aria-label="Timeline marks" className="recording-moments"><div className="recording-section-heading"><h2>Key moments</h2><span>{playback.events.length}</span></div><div className="recording-moment-list">{playback.events.map(event => <button type="button" key={event.id} onClick={() => seek(event.atMs)}><time>{recordingTime(event.atMs)}</time><span>{event.mark?.type || event.kind}</span></button>)}{playback.events.length === 0 && <p>No marks were added to this recording.</p>}</div></section>
       <section aria-label="Keyframes" className="recording-keyframes">{playback.keyframes.map(frame => {
         const image = playback.artifacts.find(a => a.id === frame.artifact_id)

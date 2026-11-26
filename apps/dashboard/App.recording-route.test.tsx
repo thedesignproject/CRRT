@@ -7,7 +7,7 @@ vi.mock('./hooks/useProjects', () => ({ useProjects: () => ({ projects: data.pro
 vi.mock('./hooks/useComments', () => ({ useComments: () => ({ comments: data.comments, loading: false, error: null, refresh: data.refresh }) }))
 vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: false }) }))
 vi.mock('./hooks/useAgentSession', () => ({ useAgentSession: () => ({ session: null, shareState: null, events: [], error: null, copyPrompt: data.refresh, adoptSession: data.refresh }) }))
-vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: any) => <><nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button aria-pressed={props.brainActive} onClick={props.onOpenBrain}>Brain</button><button onClick={() => props.setSelectedProject('project')}>Project</button></nav>{props.children}{props.footer}</> }))
+vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: any) => <><nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button aria-pressed={props.brainActive} onClick={props.onOpenBrain}>Brain</button><button onClick={() => props.setSelectedProject('project')}>Project</button><output aria-label="Selected project">{props.selectedProject}</output></nav>{props.children}{props.footer}</> }))
 vi.mock('./components/BrainPage', () => ({ BrainPage: () => <h1>Rules</h1> }))
 vi.mock('./components/RecordingsPage', () => ({ RecordingsPage: () => <h1>Recording library</h1> }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <h1>Personal Inbox</h1> }))
@@ -63,4 +63,18 @@ it('opens Brain as a workspace page with shortcuts off', () => {
   expect(screen.getByRole('button', { name: 'Brain' })).toHaveAttribute('aria-pressed', 'true')
   fireEvent.keyDown(window, { key: 'k', metaKey: true })
   expect(screen.queryByRole('dialog')).toBeNull()
+})
+it('keeps Brain workspace-wide: opening it from the Inbox selects no project', async () => {
+  history.replaceState(null, '', '/')
+  localStorage.setItem('crrt:dashboard:onboarded', '1')
+  data.projects = [{ publicKey: 'project', name: 'Project', capabilities: [] }]
+  auth.value = { session: { access_token: 'owner-token' }, user: { id: 'owner' }, loading: false, signOut: vi.fn() }
+  render(<App />)
+  const selected = screen.getByRole('status', { name: 'Selected project' })
+  await waitFor(() => expect(selected).toHaveTextContent('project'))
+  fireEvent.click(screen.getByRole('button', { name: 'Inbox' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Brain' }))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument()
+  expect(selected).toBeEmptyDOMElement()
 })

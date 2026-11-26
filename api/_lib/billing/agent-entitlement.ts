@@ -35,11 +35,11 @@ export function eligibleAgentPriceIds(env: Record<string, string | undefined> = 
 }
 
 export function hasAgentEntitlement(
-  account: (CloudSubscription & { price_id: string | null; is_legacy?: boolean }) | null,
+  account: (CloudSubscription & { price_id: string | null; included_pro?: string | null }) | null,
   env: Record<string, string | undefined> = process.env,
 ) {
   if (!isCloud(env)) return true
-  return Boolean(account?.is_legacy || (account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan))
+  return Boolean(account?.included_pro || (account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan))
 }
 
 export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: string): Promise<WidgetAgentAccess> {
