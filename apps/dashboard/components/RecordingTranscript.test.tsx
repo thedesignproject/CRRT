@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest'
 import { RecordingTranscript, recordingTime } from './RecordingTranscript'
 import type { RecordingPlayback } from '../../../shared/record/client'
 
-const playback = { recording: { state: 'ready' }, stages: [], transcript: [
+const playback = { recording: { state: 'ready' }, stages: [], artifacts: [], transcript: [
   { id: 'one', start_ms: 1000, end_ms: 3000, text: 'Open the checkout page.' },
   { id: 'two', start_ms: 4000, end_ms: 6000, text: 'Make the button easier to find.' },
 ] } as unknown as RecordingPlayback
@@ -38,4 +38,10 @@ it.each([
   render(<RecordingTranscript playback={value} atMs={0} seek={vi.fn()} />)
   expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
   expect(screen.queryByRole('searchbox')).toBeNull()
+})
+
+it.each([[[{ kind: 'screen' }], 'You can still watch the video.'], [[], 'The transcript isn’t available for this recording.']])('only offers the video after a transcription failure when it can play', (artifacts, message) => {
+  const value = { ...playback, artifacts, transcript: [], stages: [{ stage: 'transcription', state: 'failed', failure: null }] } as unknown as RecordingPlayback
+  render(<RecordingTranscript playback={value} atMs={0} seek={vi.fn()} />)
+  expect(screen.getByText(message)).toBeInTheDocument()
 })

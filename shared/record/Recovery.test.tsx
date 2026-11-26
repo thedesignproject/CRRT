@@ -17,7 +17,7 @@ it('offers separate stage retries, blocks duplicate clicks and retains failures 
   let resolve!: () => void
   const retry = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockImplementationOnce(() => new Promise<void>(r => { resolve = r }))
   render(<RecordingRecovery stages={[job('metadata'), job('transcription'), job('alignment')]} retry={retry} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Retry video' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Retry screenshots' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Offline')
   fireEvent.click(screen.getByRole('button', { name: 'Retry transcription' }))
   expect(screen.getByRole('button', { name: 'Retrying…' })).toBeDisabled()
@@ -29,10 +29,14 @@ it('offers separate stage retries, blocks duplicate clicks and retains failures 
 
 it('does not expose recovery to public viewers or for terminal failures', () => {
   const view = render(<RecordingRecovery stages={[job('metadata')]} />)
-  expect(screen.getByText('We couldn’t prepare your video.')).toBeInTheDocument()
+  expect(screen.getByText('We couldn’t prepare screenshots for this recording.')).toBeInTheDocument()
   expect(screen.queryByRole('button')).toBeNull()
   view.rerender(<RecordingRecovery stages={[job('metadata', 'failed', false), { ...job('transcription'), failure: null }]} retry={vi.fn()} />)
   expect(screen.queryByRole('button')).toBeNull()
+  view.rerender(<RecordingRecovery stages={[{ ...job('metadata', 'failed', false), failure: { code: 'record_artifact_mismatch', stage: 'metadata', retryable: false } }]} />)
+  expect(screen.getByText('We couldn’t verify the uploaded video.')).toBeInTheDocument()
+  view.rerender(<RecordingRecovery stages={[{ ...job('transcription', 'failed', false), failure: { code: 'record_artifact_mismatch', stage: 'transcription', retryable: false } }]} />)
+  expect(screen.getByText('We couldn’t transcribe this recording.')).toBeInTheDocument()
 })
 
 it('queues only the selected stage while retaining playable video and other failures', () => {
