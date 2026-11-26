@@ -1,4 +1,4 @@
-import { act, render, renderHook } from '@testing-library/react'
+import { act, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { StatusBar } from './StatusBar'
@@ -13,26 +13,42 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-it('shows project shortcuts by default', () => {
+const keysIn = (container: HTMLElement) => [...container.querySelectorAll('kbd')].map(key => key.textContent)
+
+it('stays hidden until "?" and lists project shortcuts', () => {
   const view = render(<StatusBar />)
-  expect([...view.container.querySelectorAll('kbd')].map(key => key.textContent))
-    .toEqual(['A', 'M', 'D', 'Space', 'J', 'K', 'S', '⌘K'])
+  expect(view.container.querySelector('kbd')).toBeNull()
+  fireEvent.keyDown(window, { key: '?' })
+  expect(keysIn(view.container)).toEqual(['A', 'M', 'D', 'Space', 'J', 'K', 'S', '⌘K', '?'])
+  fireEvent.keyDown(window, { key: '?' })
+  expect(view.container.querySelector('kbd')).toBeNull()
 })
 
-it.each([false, true])('hides and restores footer shortcuts when toggled (personal=%s)', (personal) => {
+it('closes with Escape and ignores "?" with modifiers or while typing', () => {
+  const view = render(<><input aria-label="Reply" /><div contentEditable data-testid="editor" /><StatusBar /></>)
+  fireEvent.keyDown(view.getByLabelText('Reply'), { key: '?' })
+  fireEvent.keyDown(view.getByTestId('editor'), { key: '?' })
+  fireEvent.keyDown(window, { key: '?', metaKey: true })
+  fireEvent.keyDown(window, { key: '?', ctrlKey: true })
+  fireEvent.keyDown(window, { key: '?', altKey: true })
+  fireEvent.keyDown(window, { key: 'x' })
+  expect(view.container.querySelector('kbd')).toBeNull()
+  fireEvent.keyDown(window, { key: '?' })
+  expect(view.container.querySelector('kbd')).not.toBeNull()
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(view.container.querySelector('kbd')).toBeNull()
+})
+
+it.each([false, true])('hides and restores shortcuts when the preference toggles (personal=%s)', (personal) => {
   const preference = renderHook(() => useKeyboardShortcuts('dashboard'))
   const view = render(<StatusBar personal={personal} agentAvailable={false} />)
-  const expected = personal ? ['Space', 'J', 'K'] : ['A', 'M', 'D', 'Space', 'J', 'K', '⌘K']
-  const keys = () => [...view.container.querySelectorAll('kbd')].map(key => key.textContent)
-  expect(keys()).toEqual(expected)
+  fireEvent.keyDown(window, { key: '?' })
+  const expected = personal ? ['Space', 'J', 'K', '?'] : ['A', 'M', 'D', 'Space', 'J', 'K', '⌘K', '?']
+  expect(keysIn(view.container)).toEqual(expected)
   act(() => preference.result.current[1](false))
-  expect(keys()).toEqual([])
+  expect(keysIn(view.container)).toEqual([])
+  fireEvent.keyDown(window, { key: '?' })
+  expect(keysIn(view.container)).toEqual([])
   act(() => preference.result.current[1](true))
-  expect(keys()).toEqual(expected)
-})
-
-it.each([false, true])('hides footer shortcuts on initial load when disabled (personal=%s)', (personal) => {
-  localStorage.setItem('crrt:keyboard-shortcuts:dashboard', 'disabled')
-  const view = render(<StatusBar personal={personal} />)
-  expect(view.container.querySelector('kbd')).toBeNull()
+  expect(keysIn(view.container)).toEqual(expected)
 })
