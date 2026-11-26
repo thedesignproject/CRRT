@@ -27,6 +27,22 @@ it('preserves selectable text on copy failure and supports relative API URLs', a
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
   render(<McpSetup apiBase="/api" />)
   fireEvent.click(screen.getByRole('button', { name: 'Copy setup prompt' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Select and copy the text above')
+  expect(await screen.findByRole('status')).toHaveTextContent('Select and copy the prompt below')
   expect(screen.getByText(/Set up CRRT for this agent/)).toHaveTextContent(`Use this MCP server URL: ${window.location.origin}/api/mcp/v1`)
+})
+
+it('keeps the complete prompt available behind the compact onboarding action', () => {
+  render(<McpSetup apiBase="/api" />)
+  expect(screen.getByText('Onboard your agent')).toBeVisible()
+  const prompt = screen.getByText(/Set up CRRT for this agent/)
+  expect(prompt.closest('details')).not.toHaveAttribute('open')
+  fireEvent.click(screen.getByText('View prompt'))
+  expect(screen.getByText('View prompt')).toBeInTheDocument()
+})
+
+it('keeps the server address selectable when clipboard access fails', async () => {
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+  render(<McpSetup apiBase="/api" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Copy server URL' }))
+  expect(await screen.findByText('Could not copy. Select and copy the text above.')).toBeVisible()
 })
