@@ -37,13 +37,23 @@ export interface AgentMeta {
   target: PromptTarget
 }
 
+/** Destination-neutral default: a plain prompt any coding agent can take. */
+export const PROMPT_AGENT_ID = 'prompt'
+
 export const AGENTS: AgentMeta[] = [
+  { id: PROMPT_AGENT_ID, name: 'Copy as prompt', hint: 'Works with any coding agent', target: 'generic' },
   { id: 'claude-code', name: 'Claude Code', hint: 'Paste prompt in chat', target: 'claude-code' },
   { id: 'codex', name: 'Codex', hint: 'Paste prompt in prompt', target: 'codex' },
   { id: 'cursor', name: 'Cursor', hint: 'Paste prompt in composer', target: 'generic' },
   { id: 'windsurf', name: 'Windsurf', hint: 'Paste prompt in Cascade', target: 'generic' },
   { id: 'cline', name: 'Cline', hint: 'Paste prompt in chat', target: 'generic' },
+  { id: 'conductor', name: 'Conductor', hint: 'Paste prompt in the workspace chat', target: 'generic' },
 ]
+
+/** What the handoff button does with the chosen agent, e.g. "Send to Codex" or "Copy as prompt". */
+export function agentActionLabel(agent: AgentMeta) {
+  return agent.id === PROMPT_AGENT_ID ? agent.name : `Send to ${agent.name}`
+}
 
 export const AUTHOR_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9']
 

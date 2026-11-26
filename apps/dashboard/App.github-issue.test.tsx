@@ -128,7 +128,7 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
 }))
-vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { comments: Array<{ id: string }>; handoff: { onCopySessionLink: () => void }; onOpenComment: (id: string) => void; onOpenRuns: () => void }) => <section data-testid="next-steps"><span data-testid="next-step-ids">{props.comments.map((c) => c.id).join(',')}</span><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
+vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { comments: Array<{ id: string }>; handoff: { onCopySessionLink: () => void; setSelectedAgent: (id: string) => void; selectedAgentMeta: { name: string } }; onOpenComment: (id: string) => void; onOpenRuns: () => void }) => <section data-testid="next-steps"><span data-testid="next-step-ids">{props.comments.map((c) => c.id).join(',')}</span><span data-testid="agent-name">{props.handoff.selectedAgentMeta.name}</span><button onClick={() => props.handoff.setSelectedAgent('codex')}>pick codex</button><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
 vi.mock('./components/AgentRunsPage', () => ({ AgentRunsPage: (props: { queue: Array<{id:string;implementationStatus:string}>; connected: boolean; notice?: string; onOpenNextSteps: () => void }) => <section data-testid="agent-runs"><span data-testid="agent-queue">{props.connected ? props.queue.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span>{props.notice && <p role="status">{props.notice}</p>}<button onClick={props.onOpenNextSteps}>go to next steps</button></section> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
@@ -200,6 +200,12 @@ it('deselects a directly selected feedback item without opening it', async () =>
   expect(screen.getByTestId('bulk-state')).not.toHaveTextContent('comment-1')
   expect(fixtures.updateReview).not.toHaveBeenCalled()
 })
+
+/** Bulk Reopen and Reject live in the bar's More menu. */
+function bulkMenuAction(name: 'Reject' | 'Reopen') {
+  fireEvent.click(screen.getByRole('button', { name: 'More bulk actions' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(`^${name}`) }))
+}
 
 describe('<App /> GitHub issue wiring', () => {
   it('opens the project-independent recordings library', async () => {
@@ -460,7 +466,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    bulkMenuAction('Reject')
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected', '2026-01-01', undefined, {captureUndo:true,preserveExternalWork:true},
     ))
@@ -485,17 +491,17 @@ describe('<App /> GitHub issue wiring', () => {
     ))
     expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Send to Claude Code' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy as prompt' }))
     await waitFor(() => expect(fixtures.createShare).toHaveBeenCalledWith(
       'https://crrt.ai/api', 'session-token', {
         projectId: 'project-1', scopeType: 'selection', commentIds: ['comment-1'],
       },
     ))
     expect(fixtures.getPrompt).toHaveBeenCalledWith(
-      'https://crrt.ai/api', 'session-token', 'share-1', 'claude-code',
+      'https://crrt.ai/api', 'session-token', 'share-1', 'generic',
     )
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Fix selected feedback')
-    expect(screen.getByRole('status')).toHaveTextContent('1 selected item copied for Claude Code.')
+    expect(screen.getByRole('status')).toHaveTextContent('1 selected item copied as a prompt.')
   })
 
   it('sends an unpaid owner to checkout without dropping the selected feedback', async () => {
@@ -512,7 +518,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
 
     await waitFor(() => expect(fixtures.beginCheckout).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token'))
     expect(assign).toHaveBeenCalledWith('https://checkout.example/session')
@@ -530,13 +536,13 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
     await screen.findByText('Feedback changed. Review the selection and retry.')
     expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
 
     fixtures.createShare.mockRejectedValueOnce(Object.assign(new Error('Upgrade'), { code: 'upgrade_required' }))
     fixtures.beginCheckout.mockRejectedValueOnce(new Error('Checkout unavailable'))
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
     await screen.findByText('Checkout unavailable')
     expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
   })
@@ -560,7 +566,7 @@ describe('<App /> GitHub issue wiring', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    bulkMenuAction('Reject')
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenLastCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected', expect.any(String), undefined, {captureUndo:true,preserveExternalWork:true},
     ))
@@ -633,7 +639,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    bulkMenuAction('Reject')
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
     fireEvent.keyDown(window, { key: 'a' })
@@ -661,7 +667,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    bulkMenuAction('Reject')
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
     fireEvent.keyDown(window, { key: 'a' })
@@ -691,7 +697,7 @@ describe('<App /> GitHub issue wiring', () => {
     fixtures.updateReview.mockRejectedValueOnce(new Error('bulk failed'))
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getAllByRole('button', { name: 'toggle test comment' })[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    bulkMenuAction('Reject')
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalledTimes(2))
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Bulk reject'), expect.any(Array))
   })
@@ -921,7 +927,7 @@ it('rejects an exact handoff when a selected comment disappears during refresh',
  fixtures.comments = [readyFeedback('comment-1')]
  view.rerender(<App />)
  await screen.findByRole('button', { name: 'Agents, 1 ready' })
- fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
  expect(screen.getByRole('alert')).toHaveTextContent('Feedback changed')
  expect(fixtures.createShare).not.toHaveBeenCalled()
 })
@@ -935,7 +941,7 @@ it('excludes internal feedback from Agent discovery and explains an internal bul
  fireEvent.click(screen.getByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
- fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
  expect(screen.getByRole('alert')).toHaveTextContent('Only shared feedback')
  expect(fixtures.createShare).not.toHaveBeenCalled()
 })
@@ -948,7 +954,7 @@ it.each(['cancel', 'navigate'])('does not resurrect old bulk failures after %s',
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+ bulkMenuAction('Reject')
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
@@ -968,7 +974,7 @@ it('does not clear a newer selection after an older successful bulk completion',
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+ bulkMenuAction('Reject')
  fireEvent.keyDown(window, { key: 'Escape' })
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
@@ -984,7 +990,7 @@ it('does not restore selection after cancellation during the refresh await', asy
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+ bulkMenuAction('Reject')
  await waitFor(() => expect(fixtures.fn).toHaveBeenCalled())
  fireEvent.keyDown(window, { key: 'Escape' })
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
@@ -1005,7 +1011,7 @@ it.each(['share', 'prompt', 'clipboard', 'failure'])('discards stale %s handoff 
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
  if (step === 'prompt') await waitFor(() => expect(fixtures.getPrompt).toHaveBeenCalled())
  if (step === 'clipboard') await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalled())
  fireEvent.keyDown(window, { key: 'Escape' })
@@ -1034,7 +1040,7 @@ it('keeps only failed items after a partial multi-item rejection', async () => {
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+ bulkMenuAction('Reject')
  await screen.findByText('2 items could not be updated and remain selected.')
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
 })
@@ -1052,7 +1058,7 @@ it('reports a non-Error checkout failure', async () => {
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
  await screen.findByText('Could not open plan upgrade.')
 })
 it.each(['success','failure'])('discards a canceled checkout %s', async step => {
@@ -1064,7 +1070,7 @@ it.each(['success','failure'])('discards a canceled checkout %s', async step => 
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Copy as prompt' }))
  await waitFor(() => expect(fixtures.beginCheckout).toHaveBeenCalled())
  fireEvent.keyDown(window,{key:'Escape'})
  await act(async () => { if(step==='success') finish({url:'https://checkout.example'}); else fail(new Error('old checkout')) })
@@ -1080,7 +1086,7 @@ it('rejects a handoff until loaded comments belong to the current project', asyn
  fireEvent.click(screen.getByRole('button',{name:'show all'}))
  fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
  fireEvent.click(screen.getByRole('button',{name:'toggle test comment'}))
- fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
+ fireEvent.click(screen.getByRole('button',{name:'Copy as prompt'}))
  expect(screen.getByRole('alert')).toHaveTextContent('Feedback changed')
  expect(fixtures.createShare).not.toHaveBeenCalled()
 })
@@ -1100,8 +1106,8 @@ it.each(['success','failure'])('handles a two-comment prompt %s without silent o
  fireEvent.click(await screen.findByRole('button',{name:'show all'}))
  fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
  fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
- fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
- if(step==='success') await screen.findByText('2 selected items copied for Claude Code.')
+ fireEvent.click(screen.getByRole('button',{name:'Copy as prompt'}))
+ if(step==='success') await screen.findByText('2 selected items copied as a prompt.')
  else await screen.findByText('Could not send the selected feedback to Agent.')
  expect(fixtures.createShare).toHaveBeenCalledWith('https://crrt.ai/api','session-token',{projectId:'project-1',scopeType:'selection',commentIds:['comment-1','comment-2']})
 })
@@ -1124,8 +1130,8 @@ it('opens Agent runs after a completed bulk handoff',async()=>{
  fireEvent.click(await screen.findByRole('button',{name:'show all'}))
  fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
  fireEvent.click(screen.getByRole('button',{name:'toggle test comment'}))
- fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
- await screen.findByText('1 selected item copied for Claude Code.')
+ fireEvent.click(screen.getByRole('button',{name:'Copy as prompt'}))
+ await screen.findByText('1 selected item copied as a prompt.')
  expect(fixtures.adoptSession).toHaveBeenCalledWith(expect.objectContaining({shareId:'share-1'}),['comment-1'])
  expect(screen.getByTestId('agent-runs')).toBeInTheDocument()
 })
@@ -1149,7 +1155,7 @@ it('rejects oversized inherited Inbox selections before requesting a handoff',as
  render(<App />)
  fireEvent.click(await screen.findByRole('button',{name:'my comments'}))
  fireEvent.click(screen.getByRole('button',{name:'continue oversized moved Inbox'}))
- fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
+ fireEvent.click(screen.getByRole('button',{name:'Copy as prompt'}))
  expect(screen.getByRole('alert')).toHaveTextContent('up to 500')
  expect(fixtures.createShare).not.toHaveBeenCalled()
 })
@@ -1214,7 +1220,7 @@ it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
- fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+ bulkMenuAction('Reopen')
  await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
  for (const id of ['comment-1', 'comment-2']) {
   expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open', '', 'unassigned', {captureUndo:true,preserveExternalWork:true})
@@ -1230,7 +1236,7 @@ it('keeps failed reopen items selected for retry and reports partial failure', a
  fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+ bulkMenuAction('Reopen')
  await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1'))
  expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
@@ -1242,19 +1248,19 @@ it('keeps Reopen busy until its atomic request settles', async () => {
  render(<App />)
  fireEvent.click(await screen.findByRole('button',{name:'show all'}))
  fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
- fireEvent.click(screen.getByRole('button',{name:'Reopen'}))
- expect(screen.getByRole('button',{name:'Reopen'})).toBeDisabled()
+ bulkMenuAction('Reopen')
+ expect(screen.getByRole('button',{name:'More bulk actions'})).toBeDisabled()
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
  await act(async()=>fail(new Error('offline')))
  await screen.findByText('1 item could not be updated and remain selected.')
- expect(screen.getByRole('button',{name:'Reopen'})).toBeEnabled()
+ expect(screen.getByRole('button',{name:'More bulk actions'})).toBeEnabled()
 })
 
 it('rejects the visible list in two clicks without changing implementation status', async () => {
  fixtures.comments.push(...['comment-1', 'comment-2'].map(id => ({ id, projectId: 'project-1', body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' })))
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+ bulkMenuAction('Reject')
  await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
  expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
  for (const id of ['comment-1', 'comment-2']) expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'rejected', '', undefined, {captureUndo:true,preserveExternalWork:true})
@@ -1371,7 +1377,7 @@ it('never offers an unfenced Undo when the server omits the changed version', as
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
  fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
- await waitFor(() => expect(screen.getByRole('button', { name: 'Send to Claude Code' })).toBeEnabled())
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Copy as prompt' })).toBeEnabled())
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
 })
 
@@ -1385,7 +1391,7 @@ it('discards a conflicting Undo version without reverting newer feedback', async
  fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
  await screen.findByText('Feedback changed after this action and was not undone. Refresh to review it.')
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.getByRole('button', { name: 'Send to Claude Code' })).toBeEnabled()
+ expect(screen.getByRole('button', { name: 'Copy as prompt' })).toBeEnabled()
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })
 
@@ -1492,14 +1498,15 @@ it('retains only failed completion items and offers Undo for the successful ones
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })
 
-it.each(['Reopen','Reject'])('restores previous states and ownership through signed Undo for %s',async action=>{
+it.each(['Reopen','Reject'] as const)('restores previous states and ownership through signed Undo for %s',async action=>{
  fixtures.comments=[{...readyFeedback('comment-1'),implementationStatus:'in_progress',claimedByAgentId:'agent'}]
  fixtures.updateReview.mockResolvedValueOnce({updatedAt:'2026-10-30T12:01:00Z',undoToken:'signed-receipt'})
  render(<App />)
  fireEvent.click(await screen.findByRole('button',{name:'show all'}))
  fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
- expect(screen.getByText('Reject keeps linked issues unchanged.')).toBeVisible()
- fireEvent.click(screen.getByRole('button',{name:action}))
+ fireEvent.click(screen.getByRole('button',{name:'More bulk actions'}))
+ expect(screen.getByText('Linked issues stay unchanged.')).toBeInTheDocument()
+ fireEvent.click(screen.getByRole('menuitem',{name:new RegExp(`^${action}`)}))
  const undo=await screen.findByRole('button',{name:`Undo ${action.toLowerCase()}`})
  fireEvent.click(undo)
  await screen.findByText('Previous statuses restored.')
@@ -1508,13 +1515,13 @@ it.each(['Reopen','Reject'])('restores previous states and ownership through sig
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })
 
-it.each(['Reopen', 'Reject'])('discards an expired signed Undo for %s instead of offering retries', async action => {
+it.each(['Reopen', 'Reject'] as const)('discards an expired signed Undo for %s instead of offering retries', async action => {
  fixtures.comments = [readyFeedback('comment-1')]
  fixtures.updateReview.mockResolvedValueOnce({updatedAt: '2026-10-30T12:01:00Z', undoToken: 'expired-receipt'})
  render(<App />)
  fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
  fireEvent.click(await screen.findByRole('button', {name: 'select visible test comments'}))
- fireEvent.click(screen.getByRole('button', {name: action}))
+ bulkMenuAction(action)
  const undo = await screen.findByRole('button', {name: `Undo ${action.toLowerCase()}`})
  fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('Invalid or expired Undo'), {status: 400}))
  fireEvent.click(undo)
@@ -1529,7 +1536,7 @@ it('keeps only retryable signed Undo failures after expiry and version conflicts
  render(<App />)
  fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
  fireEvent.click(await screen.findByRole('button', {name: 'select visible test comments'}))
- fireEvent.click(screen.getByRole('button', {name: 'Reject'}))
+ bulkMenuAction('Reject')
  const undo = await screen.findByRole('button', {name: 'Undo reject'})
  fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('Invalid or expired Undo'), {status: 400}))
   .mockRejectedValueOnce(Object.assign(new Error('Feedback changed'), {status: 409}))
@@ -1691,4 +1698,31 @@ it('hands the selected ready feedback to Agents, or everything ready without a s
  fireEvent.click(await screen.findByRole('button', { name: 'toggle test comment' }))
  fireEvent.click(screen.getByRole('button', { name: /nav next steps/ }))
  expect(screen.getByTestId('next-step-ids')).toHaveTextContent(/^comment-1$/)
+})
+
+it('defaults Agent handoff to a plain prompt and remembers the chosen tool', async () => {
+ fixtures.comments = [readyFeedback('comment-1')]
+ const view = render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: /nav next steps/ }))
+ expect(screen.getByTestId('agent-name')).toHaveTextContent('Copy as prompt')
+ fireEvent.click(screen.getByRole('button', { name: 'pick codex' }))
+ expect(screen.getByTestId('agent-name')).toHaveTextContent('Codex')
+ expect(window.localStorage.setItem).toHaveBeenCalledWith('crrt-dashboard-agent', 'codex')
+ view.unmount()
+
+ vi.mocked(window.localStorage.getItem).mockImplementation((key: string) => key === 'crrt-dashboard-agent' ? 'codex' : null)
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: /nav next steps/ }))
+ expect(screen.getByTestId('agent-name')).toHaveTextContent('Codex')
+})
+
+it('keeps Agent handoff working when storage is unavailable', async () => {
+ fixtures.comments = [readyFeedback('comment-1')]
+ vi.mocked(window.localStorage.getItem).mockImplementation((key: string) => { if (key === 'crrt-dashboard-agent') throw new Error('blocked'); return null })
+ vi.mocked(window.localStorage.setItem).mockImplementation(() => { throw new Error('blocked') })
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: /nav next steps/ }))
+ expect(screen.getByTestId('agent-name')).toHaveTextContent('Copy as prompt')
+ fireEvent.click(screen.getByRole('button', { name: 'pick codex' }))
+ expect(screen.getByTestId('agent-name')).toHaveTextContent('Codex')
 })

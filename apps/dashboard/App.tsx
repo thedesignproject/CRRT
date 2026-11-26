@@ -5,6 +5,8 @@ import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
 import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Ellipsis } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@crrt/ui/components/dropdown-menu'
 import { InboxMoveUndo } from './components/InboxMoveUndo'
 import type { InboxUndoItem } from './api'
 import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
@@ -18,7 +20,7 @@ import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath, route } from './lib/routes'
 import { billingPlanSelection } from './lib/access-review-link'
-import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
+import { AGENTS, PROMPT_AGENT_ID, agentActionLabel, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { BillingPage } from './components/BillingPage'
 import { UserMenu } from './components/UserMenu'
 import { TrialOffer } from './components/TrialOffer'
@@ -52,6 +54,16 @@ import { DocumentRecoveryProvider } from './documents/DocumentRecovery'
 import { DocumentsPage } from './documents/DocumentsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
+const AGENT_STORAGE_KEY = 'crrt-dashboard-agent'
+
+/** The agent picked on an earlier visit, if it is still offered. */
+function storedAgent() {
+  try {
+    const id = window.localStorage.getItem(AGENT_STORAGE_KEY)
+    if (id && AGENTS.some((agent) => agent.id === id)) return id
+  } catch { /* storage unavailable */ }
+  return PROMPT_AGENT_ID
+}
 export function App() {
   return <DocumentRecoveryProvider><AppRoutes /></DocumentRecoveryProvider>
 }
@@ -195,7 +207,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setAddProjectOpen(true)
     setNewProjectRun((run) => run + 1)
   }
-  const [selectedAgent, setSelectedAgent] = useState('claude-code')
+  // The chosen destination sticks across visits; a plain prompt until someone picks a tool.
+  const [selectedAgent, setSelectedAgentState] = useState(storedAgent)
+  const setSelectedAgent = useCallback((id: string) => {
+    setSelectedAgentState(id)
+    try { window.localStorage.setItem(AGENT_STORAGE_KEY, id) } catch { /* storage unavailable: keep it for this visit */ }
+  }, [])
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
   const mutation = useFeedbackMutationError(`${accessToken}:${selectedProject}`)
@@ -640,7 +657,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (generation !== bulkGeneration.current) return
       adoptSession({ shareId: share.shareId, slug: share.slug, token: share.token, docUrl: share.tokenUrl }, commentIds)
       setView('agent-runs')
-      setBulkTransitionNotice(`${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} copied for ${selectedAgentMeta.name}.`)
+      setBulkTransitionNotice(`${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} ${selectedAgentMeta.id === PROMPT_AGENT_ID ? 'copied as a prompt' : `copied for ${selectedAgentMeta.name}`}.`)
     } catch (error) {
       if (generation !== bulkGeneration.current) return
       const requestError = error as Error & { code?: string }
@@ -1028,12 +1045,20 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
               disabled={bulkActionBusy}
               onClick={() => { void handoffSelectedToAgent() }}
             >
-              {bulkActionBusy ? 'Working…' : allSelectedReady ? `Send to ${selectedAgentMeta.name}` : 'Mark ready'}
+              {bulkActionBusy ? 'Working…' : allSelectedReady ? agentActionLabel(selectedAgentMeta) : 'Mark ready'}
             </button>
             <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
-            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reopen') }}>Reopen</button>
-            <button type="button" className="dashboard-bulk-secondary dashboard-bulk-danger" disabled={bulkActionBusy} title="Reject feedback only; linked issues stay unchanged" onClick={() => { void applyBulkAction('reject') }}>Reject</button>
-            <span className="text-xs text-muted-foreground">Reject keeps linked issues unchanged.</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="dashboard-bulk-secondary" disabled={bulkActionBusy} aria-label="More bulk actions">
+                <Ellipsis size={16} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="top" className="w-60">
+                <DropdownMenuItem onClick={() => { void applyBulkAction('reopen') }}>Reopen</DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onClick={() => { void applyBulkAction('reject') }}>
+                  <span className="flex flex-col">Reject<span className="text-xs text-muted-foreground">Linked issues stay unchanged.</span></span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </BulkActionBar>
         )}
       </div>
