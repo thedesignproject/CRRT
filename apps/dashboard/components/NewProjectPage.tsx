@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CommandBlock, ConnectionStatus, InlineCode, PromptBlock, SegmentedTabs } from '@crrt/ui/crrt'
 import type { ProjectKeyAvailability } from '../api'
-import { route } from '../lib/routes'
+import { landingRoute, route } from '../lib/routes'
 import { setupPrompt } from '../lib/setup-prompt'
 import { isValidProjectKey, slugify } from '../lib/utils'
 
@@ -21,8 +21,8 @@ interface NewProjectPageProps {
   /** Creates the project; resolves false when the server refused it. */
   onCreate: (projectKey: string, name: string) => Promise<boolean>
   error?: string | null
-  /** Set when the account needs a plan before it can create projects. */
-  planRequired?: { label: string }
+  /** Set when the account needs a plan before it can create projects. `trial` says a free trial is still available. */
+  planRequired?: { label: string; trial?: boolean }
   /** The created project already received its first pin. */
   firstPin?: boolean
   onOpenProject: () => void
@@ -132,14 +132,26 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
       <div className="mx-auto flex w-full max-w-170 flex-col gap-6 px-6 py-12">
         <header className="flex flex-col gap-2">
           <h1 className="text-2xl leading-tight font-semibold tracking-tight text-text-strong">{firstVisit ? 'Create your first project' : 'New project'}</h1>
-          <p className="text-text-body">Name it, then your coding agent installs CRRT with this project’s ID. Paste a prompt, or connect MCP once.</p>
+          <p className="text-text-body">{planRequired
+            ? 'First choose how to run CRRT. Then name your project, and your coding agent installs it.'
+            : 'Name it, then your coding agent installs CRRT with this project’s ID. Paste a prompt, or connect MCP once.'}</p>
         </header>
 
         {planRequired ? (
-          <div className="flex flex-col items-start gap-3 rounded-lg p-4 ring-1 ring-border">
-            <p className="text-sm text-text-body">Projects need an active plan. You can try CRRT free before you pay.</p>
-            <a href={route('/billing')} className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80">{planRequired.label}</a>
-          </div>
+          <section aria-label="Ways to run CRRT" className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col items-start gap-2 rounded-lg p-4 ring-1 ring-border">
+              <h2 className="text-sm font-semibold text-text-strong">CRRT Cloud</h2>
+              <p className="flex-1 text-sm text-text-body">{planRequired.trial
+                ? 'We host it for you. Cloud projects need Pro, and you can try it free for 14 days first.'
+                : 'We host it for you. Cloud projects need an active Pro plan.'}</p>
+              <a href={route('/billing')} className="mt-1 inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/80">{planRequired.label}</a>
+            </div>
+            <div className="flex flex-col items-start gap-2 rounded-lg p-4 ring-1 ring-border">
+              <h2 className="text-sm font-semibold text-text-strong">Self-hosted</h2>
+              <p className="flex-1 text-sm text-text-body">Free. Run CRRT on your own servers and keep every piece of data there.</p>
+              <a href={landingRoute('/docs/self-host')} className="mt-1 inline-flex h-8 items-center rounded-md px-3 text-xs font-medium text-text-strong ring-1 ring-border hover:bg-accent">Install it yourself</a>
+            </div>
+          </section>
         ) : (
           <>
             <div className="flex flex-col gap-1.5">

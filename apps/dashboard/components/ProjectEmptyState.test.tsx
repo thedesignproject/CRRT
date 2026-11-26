@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ProjectEmptyState } from './ProjectEmptyState'
+import { landingRoute } from '../lib/routes'
 import { setupPrompt } from '../lib/setup-prompt'
 
 describe('ProjectEmptyState', () => {
@@ -25,5 +26,6 @@ describe('ProjectEmptyState', () => {
   it('leaves Storybook out for people who cannot manage it', () => {
     render(<ProjectEmptyState projectId="project-1" />)
     expect(screen.queryByText('Connect Storybook')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Read the install guide →' })).toHaveAttribute('href', landingRoute('/docs/install'))
   })
 })

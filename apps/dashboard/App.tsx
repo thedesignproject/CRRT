@@ -906,7 +906,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           checkAvailability={checkAvailability}
           onCreate={handleAddProject}
           error={addProjectError}
-          planRequired={projectGate.planRequired ? { label: projectGate.trialAvailable ? 'Start free trial' : 'Choose a plan' } : undefined}
+          planRequired={projectGate.planRequired ? { label: projectGate.trialAvailable ? 'Start free trial' : 'Subscribe to Pro', trial: projectGate.trialAvailable } : undefined}
           firstPin={commentsProjectId === selectedProject && serverComments.length > 0}
           onOpenProject={() => setAddProjectOpen(false)}
           onCheckFirstPin={checkFirstPin}
