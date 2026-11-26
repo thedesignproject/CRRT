@@ -98,7 +98,17 @@ function AppRoutes() {
     return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
   }
 
-  if (!session || !user) return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
+  if (!session || !user) {
+    if (pathname === '/billing') {
+      // AppSumo buyers land here from /appsumo; return them to the redeem field.
+      const search = new URLSearchParams(window.location.search)
+      const initialMode = search.get('auth') === 'signup' ? 'signup' : undefined
+      search.delete('auth')
+      const query = search.toString()
+      return <LoginPage initialMode={initialMode} continuationPath={route('/billing') + (query ? `?${query}` : '')} />
+    }
+    return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
+  }
   if (pathname === '/documents') return <DocumentsPage key={user.id} userId={user.id} apiBase={API_BASE} session={session.access_token} author={user.email ?? 'Project member'} />
 
   const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined
@@ -706,24 +716,28 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
 
-      if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
-      if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
-      if (e.key === ' ') { e.preventDefault(); goNext() }
+      // Comment shortcuts act on the selected comment, so only while the feedback list shows it.
+      if (view === 'feedback') {
+        if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
+        if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
+        if (e.key === ' ') { e.preventDefault(); goNext() }
 
-      if (selectedComment && canManageFeedback) {
-        if (e.key === 'a') toggleReview(selectedComment, 'accepted')
-        if (e.key === 'd') toggleReview(selectedComment, 'rejected')
-        if (e.key === 'm') handleToggleDone(selectedComment.id)
+        if (selectedComment && canManageFeedback) {
+          if (e.key === 'a') toggleReview(selectedComment, 'accepted')
+          if (e.key === 'd') toggleReview(selectedComment, 'rejected')
+          if (e.key === 'm') handleToggleDone(selectedComment.id)
+        }
       }
 
-      if (e.key === 's' && canOpenAgentPanel) setView((v) => v === 'next-steps' ? 'feedback' : 'next-steps')
+      if (e.key === 's' && canOpenAgentPanel && (view === 'feedback' || agentView !== null)) setView((v) => v === 'next-steps' ? 'feedback' : 'next-steps')
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
+  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, agentView, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
+    setView('feedback')
     setSelectedCommentId(commentId)
     setCmdOpen(false)
   }, [])
@@ -740,11 +754,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (action === 'filter-ready') selectFilter('ready')
     if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
     if (action === 'filter-done') selectFilter('done')
-    if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
-    if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
-    if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
+    // A filter or comment picked from another page is shown in the feedback list.
+    if (action.startsWith('filter-')) setView('feedback')
+    // Like A, D and M: act on the selected comment only while the feedback list shows it.
+    if (view === 'feedback' && selectedComment && canManageFeedback) {
+      if (action === 'accept') toggleReview(selectedComment, 'accepted')
+      if (action === 'reject') toggleReview(selectedComment, 'rejected')
+      if (action === 'done') handleToggleDone(selectedComment.id)
+    }
     setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
+  }, [view, selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return

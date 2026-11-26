@@ -65,13 +65,26 @@ it('serves early processing states without publishing unverified source media or
   m.from.mockImplementation(table => query(table === 'recordings' ? row : table === 'recording_transcript_segments' ? [] : null))
   expect((await playback(row)).artifacts).toEqual([])
 })
-it('returns expiring private playback artifacts only after the metadata stage succeeds', async () => {
-  m.from.mockImplementation(table => query(table === 'recording_jobs' ? [{ stage: 'transcription', state: 'failed' }, { stage: 'metadata', state: 'done' }] : table === 'recording_events' ? [{ data: { atMs: 100 } }] : []))
-  const result = await playback(row)
-  expect(result.artifacts[0]).toMatchObject({ url: 'private-signed-url', expiresInSeconds: 300 })
+it.each([
+  ['pending', null], ['running', null], ['done', null], ['failed', { code: 'record_media_invalid', stage: 'metadata', retryable: false }],
+])('returns verified source playback once finalized while metadata is %s', async (state, failure) => {
+  const finalized = { ...row, manifest_hash: 'manifest' }
+  m.from.mockImplementation(table => query(table === 'recording_jobs' ? [{ stage: 'transcription', state: 'failed' }, { stage: 'metadata', state, failure }] : table === 'recording_events' ? [{ data: { atMs: 100 } }] : []))
+  const result = await playback(finalized)
+  expect(result.artifacts).toEqual([expect.objectContaining({ kind: 'screen', url: 'private-signed-url', expiresInSeconds: 300 })])
   expect(result.events).toEqual([{ atMs: 100 }])
   m.signed.mockResolvedValue({ data: null, error: null })
-  await expect(playback(row)).rejects.toMatchObject({ status: 503 })
+  await expect(playback(finalized)).rejects.toMatchObject({ status: 503 })
+})
+it.each(['metadata', 'transcription'])('withholds source playback after the %s worker rejects its checksum', async stage => {
+  m.from.mockImplementation(table => query(table === 'recording_jobs' ? [{ stage, state: 'failed', failure: { code: 'record_artifact_mismatch', stage, retryable: false } }] : []))
+  expect((await playback({ ...row, manifest_hash: 'manifest' })).artifacts).toEqual([])
+  expect(m.signed).not.toHaveBeenCalled()
+})
+it('keeps playback once metadata has verified every source, despite a later transcription download mismatch', async () => {
+  m.from.mockImplementation(table => query(table === 'recording_jobs' ? [{ stage: 'metadata', state: 'done', failure: null },
+    { stage: 'transcription', state: 'failed', failure: { code: 'record_artifact_mismatch', stage: 'transcription', retryable: false } }] : []))
+  expect((await playback({ ...row, manifest_hash: 'manifest' })).artifacts).toHaveLength(1)
 })
 it('fails closed for malformed tokens, missing recordings and mid-response revocation', async () => {
   await expect(readShare('bad')).rejects.toMatchObject({ status: 400 })

@@ -65,6 +65,7 @@
     "preview:landing": "bun scripts/preview-public-site.ts",
     "audit:resources": "node scripts/lighthouse-resources.mjs",
     "cloud:configure": "bun scripts/configure-cloud-plans.ts",
+    "appsumo:import": "bun scripts/import-appsumo-codes.ts",
     "cloud:check": "bun scripts/check-cloud-deployment.ts",
     "test:mcp:local": "MCP_TEST_LOCAL=1 NODE_OPTIONS=--no-experimental-webstorage bun --env-file=.env.docker.local run test -- db/mcp-auth.integration.test.ts db/documents.integration.test.ts server/mcp/local.integration.test.ts server/mcp/actions.local.integration.test.ts server/mcp/documents.local.integration.test.ts",
     "test:visual": "bun scripts/chromatic/run.ts",

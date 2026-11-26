@@ -147,7 +147,7 @@ describe('routing boundaries', () => {
   it.each(['/api/v1/agent/shares/a/state', '/.well-known/workflow/v1/step', '/dashboard', '/dashboard/projects/a', '/audit/a', '/d/a', '/assets/app.js', '/docs/missing', '/docs-install', '/resources/missing', '/resources-design-systems'])('does not intercept %s', path => {
     expect(publicRoute.test(path)).toBe(false)
   })
-  it.each([['/privacy', '/app-shell.html'], ['/support/', '/app-shell.html'], ['/d/a', '/app-shell.html'], ['/dashboard', '/dashboard/index.html'], ['/dashboard/projects/a', '/dashboard/index.html'], ['/audit/a', '/app-shell.html'], ['/docs/missing', '/public-site?__public_path=$1']])('preserves the intended fallback for %s', (path, dest) => {
+  it.each([['/privacy', '/app-shell.html'], ['/support/', '/app-shell.html'], ['/appsumo', '/app-shell.html'], ['/d/a', '/app-shell.html'], ['/dashboard', '/dashboard/index.html'], ['/dashboard/projects/a', '/dashboard/index.html'], ['/audit/a', '/app-shell.html'], ['/docs/missing', '/public-site?__public_path=$1']])('preserves the intended fallback for %s', (path, dest) => {
     expect(applicationFallbackRoutes.find(route => new RegExp(route.src).test(path))!.dest).toBe(dest)
   })
   it('keeps legacy Vercel rewrites from swallowing unknown documentation URLs', () => {
