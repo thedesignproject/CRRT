@@ -768,6 +768,236 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
+  // TDP-5930: pins are document points drawn with position:fixed, so they must
+  // follow every viewport change, including the iOS visual viewport.
+  describe('pin anchoring across viewport changes', () => {
+    function seedPin() {
+      return {
+        id: 'anchored', projectId: 'proj', pageUrl: window.location.href.split('#')[0],
+        x: 20, y: 30, selector: 'body', body: 'anchored pin', authorName: 'Ada',
+        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
+      }
+    }
+
+    function stubDocumentSize(width: number, height: number) {
+      Object.defineProperty(document.documentElement, 'scrollWidth', { value: width, configurable: true })
+      Object.defineProperty(document.documentElement, 'scrollHeight', { value: height, configurable: true })
+    }
+
+    // happy-dom has no visualViewport; model the iOS one, where window.scrollY
+    // reports the visual viewport and offsetTop is its distance from the layout one.
+    function stubVisualViewport(state: { pageLeft: number, pageTop: number, offsetLeft: number, offsetTop: number }) {
+      const viewport = Object.assign(new EventTarget(), state)
+      vi.stubGlobal('visualViewport', viewport)
+      return viewport
+    }
+
+    async function renderPin() {
+      mockFetch(undefined, () => new Response(JSON.stringify([seedPin()]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw-pin]')) throw new Error('pin not rendered')
+      })
+    }
+
+    // The pin's tip sits 11px below its top edge.
+    function pinPoint() {
+      const pin = document.querySelector<HTMLElement>('[data-fw-pin]')!
+      return { left: parseFloat(pin.style.left), top: parseFloat(pin.style.top) + 11 }
+    }
+
+    async function sync(fire: () => void) {
+      await act(async () => {
+        fire()
+        await new Promise<void>((r) => setTimeout(r, 50))
+      })
+    }
+
+    beforeEach(() => stubDocumentSize(1000, 2000))
+
+    afterEach(() => {
+      delete (document.documentElement as unknown as Record<string, unknown>).scrollWidth
+      delete (document.documentElement as unknown as Record<string, unknown>).scrollHeight
+      window.scrollX = 0
+      window.scrollY = 0
+    })
+
+    it('keeps the pin on its document point through window and nested scroll', async () => {
+      await renderPin()
+      expect(pinPoint()).toEqual({ left: 200, top: 600 })
+
+      window.scrollY = 250
+      await sync(() => document.dispatchEvent(new Event('scroll')))
+      expect(pinPoint()).toEqual({ left: 200, top: 350 })
+
+      // A nested panel scrolling is caught by the capture listener and re-syncs.
+      const panel = document.createElement('div')
+      document.body.appendChild(panel)
+      window.scrollX = 50
+      await sync(() => panel.dispatchEvent(new Event('scroll')))
+      expect(pinPoint()).toEqual({ left: 150, top: 350 })
+      panel.remove()
+    })
+
+    it('draws against the layout viewport when the iOS visual viewport is offset', async () => {
+      // Keyboard open: the visual viewport sits 150px below the layout viewport.
+      const viewport = stubVisualViewport({ pageLeft: 0, pageTop: 400, offsetLeft: 0, offsetTop: 150 })
+      window.scrollY = 400
+      await renderPin()
+      // 600 - (400 - 150). Subtracting window.scrollY would draw it at 200.
+      expect(pinPoint()).toEqual({ left: 200, top: 350 })
+
+      // Keyboard closes after Send: only the visual viewport changes.
+      viewport.offsetTop = 0
+      await sync(() => viewport.dispatchEvent(new Event('resize')))
+      expect(pinPoint()).toEqual({ left: 200, top: 200 })
+
+      viewport.pageTop = 500
+      viewport.pageLeft = 30
+      viewport.offsetLeft = 10
+      await sync(() => viewport.dispatchEvent(new Event('scroll')))
+      expect(pinPoint()).toEqual({ left: 180, top: 100 })
+
+      stubDocumentSize(1000, 3000)
+      await sync(() => window.dispatchEvent(new Event('resize')))
+      expect(pinPoint()).toEqual({ left: 180, top: 400 })
+
+      stubDocumentSize(2000, 3000)
+      await sync(() => window.dispatchEvent(new Event('orientationchange')))
+      expect(pinPoint()).toEqual({ left: 380, top: 400 })
+    })
+  })
+
+  describe('touch exit from comment mode', () => {
+    const exitButton = () => document.querySelector<HTMLButtonElement>('button[aria-label="Exit comment mode"]')
+
+    async function mount() {
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+    }
+
+    it('shows a 44px, safe-area-aware exit that returns to idle without a keyboard', async () => {
+      mockFetch()
+      await mount()
+      expect(exitButton()).toBeNull()
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      const exit = exitButton()!
+      expect(exit.hasAttribute('data-fw')).toBe(true)
+      expect(exit.style.minWidth).toBe('44px')
+      expect(exit.style.minHeight).toBe('44px')
+      expect(exit.textContent).toBe('Exit')
+      // Placed below the safe-area inset and shown only where a coarse pointer exists.
+      const css = Array.from(document.querySelectorAll('style')).map((s) => s.textContent).join('')
+      expect(css).toContain('[data-fw-crrt] .fw-touch-exit { display: none; top: calc(12px + env(safe-area-inset-top, 0px)); }')
+      expect(css).toMatch(/@media \(any-pointer: coarse\) \{\s*\[data-fw-crrt\] \.fw-touch-exit \{ display: inline-flex; \}/)
+
+      await act(async () => { fireEvent.click(exit) })
+      expect(exitButton()).toBeNull()
+      expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
+
+      // Page clicks are no longer intercepted.
+      const target = document.createElement('article')
+      document.body.appendChild(target)
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
+      await act(async () => { target.dispatchEvent(click) })
+      expect(click.defaultPrevented).toBe(false)
+      expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
+      expect(document.querySelector('textarea')).toBeNull()
+      target.remove()
+    })
+
+    it('keeps the submitted pin when leaving comment mode after Send', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea, getSendButton, targetNode } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'kept after exit' } })
+      fireEvent.click(getSendButton())
+      await waitFor(() => expect(document.body.textContent).toContain('Drop another or review comments'))
+      await waitFor(() => expect(document.querySelectorAll('[data-fw-pin]')).toHaveLength(1))
+
+      await act(async () => { fireEvent.click(exitButton()!) })
+      expect(exitButton()).toBeNull()
+      expect(document.body.textContent).not.toContain('Drop another or review comments')
+      expect(document.querySelectorAll('[data-fw-pin]')).toHaveLength(1)
+      expect(document.body.textContent).toContain('kept after exit')
+      expect(calls.filter((c) => c.init?.method === 'POST')).toHaveLength(1)
+
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 130, clientY: 210 }))
+      })
+      expect(document.querySelector('textarea')).toBeNull()
+    })
+
+    it('cancels an unsent draft like the popover Cancel and goes idle', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea, targetNode } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'never sent' } })
+
+      await act(async () => { fireEvent.click(exitButton()!) })
+      expect(exitButton()).toBeNull()
+      expect(document.querySelector('textarea')).toBeNull()
+      expect(calls.some((c) => c.init?.method === 'POST')).toBe(false)
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 120, clientY: 200 }))
+      })
+      const next = await waitFor(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('textarea')
+        if (!el) throw new Error('textarea not mounted')
+        return el
+      })
+      expect(next.value).toBe('')
+    })
+
+    it('stays out of the way of the sidebar and the name dialog', async () => {
+      mockFetch()
+      await mount()
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      expect(exitButton()).not.toBeNull()
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      expect(exitButton()).toBeNull()
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      expect(exitButton()).not.toBeNull()
+
+      const target = document.createElement('article')
+      document.body.appendChild(target)
+      await act(async () => {
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }))
+      })
+      await waitFor(() => expect(document.querySelector('input[placeholder^="e.g."]')).not.toBeNull())
+      expect(exitButton()).toBeNull()
+      target.remove()
+    })
+
+    it('leaves the Escape and C shortcuts unchanged', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { targetNode } = await enterCommentingMode()
+
+      // Escape in the composer steps back to selecting; a second Escape exits.
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      expect(document.querySelector('textarea')).toBeNull()
+      expect(exitButton()).not.toBeNull()
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      expect(exitButton()).toBeNull()
+
+      // C toggles comment mode on and off.
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      expect(exitButton()).not.toBeNull()
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      expect(exitButton()).toBeNull()
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 120, clientY: 200 }))
+      })
+      expect(document.querySelector('textarea')).toBeNull()
+    })
+  })
+
   describe('text selection comments', () => {
     function appendCopyTarget() {
       document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())

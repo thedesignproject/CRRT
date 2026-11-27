@@ -199,3 +199,28 @@ it.each(['keyboard','menu'])('dismisses an unsent reply with Escape and resumes 
   fireEvent.click(screen.getByRole('button',{name:'Send reply'}))
   await waitFor(()=>expect(submit).toHaveBeenCalledWith(expect.objectContaining({body:'Keep my reply',parentId:note.id,version:note.version})))
 })
+
+it('leaves comment mode from the touch Exit and parks a hosted draft as Escape does', () => {
+  const props = conversation({ containerSelector: '.capture-root', authorName: 'Owner' })
+  render(<><div className="capture-root"><p>A capture target.</p></div><FeedbackWidget projectId="host" conversation={props} /></>)
+  const paragraph = screen.getByText('A capture target.'), exit = () => document.querySelector<HTMLButtonElement>('button[aria-label="Exit comment mode"]')
+  paragraph.getBoundingClientRect = () => ({ left: 100, top: 100, width: 400, height: 200, right: 500, bottom: 300 } as DOMRect)
+  fireEvent.keyDown(document, { key: 'c' }); vi.mocked(props.onClearSelection).mockClear()
+  fireEvent.click(exit()!); expect(exit()).not.toBeInTheDocument(); expect(props.onClearSelection).toHaveBeenCalledOnce()
+  fireEvent.keyDown(document, { key: 'c' }); fireEvent.click(paragraph, { clientX: 220, clientY: 160 })
+  fireEvent.change(screen.getByLabelText('Leave feedback'), { target: { value: 'Parked' } })
+  fireEvent.click(exit()!)
+  expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument(); expect(exit()).not.toBeInTheDocument()
+  fireEvent.keyDown(document, { key: 'c' }); expect(screen.getByLabelText('Leave feedback')).toHaveValue('Parked')
+})
+
+it('keeps a hosted pin on its element when a nested container scrolls', async () => {
+  render(<><div className="capture-root"><p id="capture-point">A capture target.</p></div><FeedbackWidget projectId="host" conversation={conversation({ containerSelector: '.capture-root', feedback: [{ ...note, target: { selector: '#capture-point', x: 20, y: 20, elementX: .5, elementY: .5 } }] })} /></>)
+  let top = 100
+  screen.getByText('A capture target.').getBoundingClientRect = () => ({ left: 100, top, width: 400, height: 200, right: 500, bottom: top + 200 } as DOMRect)
+  const scroll = () => act(async () => { document.querySelector('.capture-root')!.dispatchEvent(new Event('scroll')); await new Promise((r) => setTimeout(r, 50)) })
+  const pin = () => document.querySelector<HTMLElement>('[data-fw-pin]')!
+  await waitFor(() => expect(document.querySelector('[data-fw-pin]')).toBeInTheDocument())
+  await scroll(); expect(pin().style.left).toBe('300px'); expect(pin().style.top).toBe('189px')
+  top = 20; await scroll(); expect(pin().style.left).toBe('300px'); expect(pin().style.top).toBe('109px')
+})
