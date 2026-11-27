@@ -1,4 +1,5 @@
 import { ConnectionStatus, InlineCode, PromptBlock, SetupChecklist, type SetupStep } from '@crrt/ui/crrt'
+import { landingRoute } from '../lib/routes'
 import { setupPrompt } from '../lib/setup-prompt'
 
 interface ProjectEmptyStateProps {
@@ -41,7 +42,7 @@ export function ProjectEmptyState({ projectId, onConnectStorybook, storybookConn
           hint="Open your app and click the carrot."
         />
         <p className="text-sm text-text-subtle">
-          Need more detail? <a href="/docs/install" target="_blank" rel="noopener noreferrer" className="font-medium text-text-strong hover:underline">Read the install guide →</a>
+          Need more detail? <a href={landingRoute('/docs/install')} target="_blank" rel="noopener noreferrer" className="font-medium text-text-strong hover:underline">Read the install guide →</a>
         </p>
       </div>
     </div>

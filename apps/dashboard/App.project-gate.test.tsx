@@ -24,7 +24,7 @@ vi.mock('./hooks/useComments', () => ({
   useComments: () => ({ comments: fixtures.comments, commentsProjectId: null, loading: false, error: null, refresh: fixtures.fn }),
 }))
 import { App } from './App'
-import { route } from './lib/routes'
+import { landingRoute, route } from './lib/routes'
 
 let assign: ReturnType<typeof vi.spyOn>
 beforeEach(() => {
@@ -41,13 +41,14 @@ afterEach(() => { vi.unstubAllGlobals(); assign.mockRestore() })
 
 it.each([
   [true, 'Start free trial'],
-  [false, 'Choose a plan'],
+  [false, 'Subscribe to Pro'],
 ])('sends owners without a plan from the first project page to Billing (trial available=%s)', async (trialAvailable, label) => {
   fixtures.gate = { planRequired: true, trialAvailable }
   render(<App />)
   expect(await screen.findByRole('heading', { name: 'Create your first project' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', route('/billing'))
   expect(screen.queryByLabelText('Project name')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Install it yourself' })).toHaveAttribute('href', landingRoute('/docs/self-host'))
 })
 
 it('creates the first project when its prompt is copied', async () => {

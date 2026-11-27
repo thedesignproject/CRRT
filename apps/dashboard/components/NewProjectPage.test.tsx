@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { FIRST_PIN_POLL_MS, NewProjectPage } from './NewProjectPage'
 import { setupPrompt } from '../lib/setup-prompt'
-import { route } from '../lib/routes'
+import { landingRoute, route } from '../lib/routes'
 
 type Props = ComponentProps<typeof NewProjectPage>
 const available = (key: string) => Promise.resolve({ key, available: true, suggestion: '' })
@@ -227,8 +227,13 @@ describe('NewProjectPage', () => {
   })
 
   it('sends accounts without a plan to Billing instead of the form', () => {
-    render(page({ planRequired: { label: 'Start free trial' } }))
+    const view = render(page({ planRequired: { label: 'Start free trial', trial: true } }))
     expect(screen.getByRole('link', { name: 'Start free trial' })).toHaveAttribute('href', route('/billing'))
+    expect(screen.getByText(/try it free for 14 days/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Project name')).toBeNull()
+
+    view.rerender(page({ planRequired: { label: 'Subscribe to Pro' } }))
+    expect(screen.getByText('We host it for you. Cloud projects need an active Pro plan.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Install it yourself' })).toHaveAttribute('href', landingRoute('/docs/self-host'))
   })
 })

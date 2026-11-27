@@ -10,13 +10,19 @@ export function SuggestedProjects({ apiBase, accessToken, onProjectsChanged }: {
   async function request(project: string) {
     if (await state.run(() => api.submit(project))) onProjectsChanged()
   }
+  const refresh = () => { void state.refresh(); onProjectsChanged() }
+  // Without matches, joining a team stays a quiet one-liner instead of an empty section.
+  if (state.data?.length === 0 && !state.error) {
+    return <section className="w-full" aria-label="Suggested projects">
+      <p className="text-xs text-muted-foreground">No suggested projects for your email yet. Ask a project admin to invite you. <button type="button" className="underline focus-visible:outline focus-visible:outline-primary disabled:opacity-50" disabled={state.loading || state.busy} onClick={refresh}>Refresh suggestions</button></p>
+    </section>
+  }
   return <section className="w-full space-y-3" aria-label="Suggested projects">
     <h2 className="text-sm font-semibold">Suggested projects</h2>
     <p className="text-xs text-muted-foreground">Projects matching your verified company email. An admin will review your request.</p>
     {state.loading && <p role="status" className="text-xs text-muted-foreground">Loading suggestions…</p>}
     {state.error && <p role="alert" className="text-xs">{state.error}</p>}
-    <button type="button" className="text-xs underline focus-visible:outline focus-visible:outline-primary disabled:opacity-50" disabled={state.loading || state.busy} onClick={() => { void state.refresh(); onProjectsChanged() }}>Refresh suggestions</button>
-    {state.data && state.data.length === 0 && <p className="text-xs text-muted-foreground">No suggested projects. Ask a project admin to add your company email domain.</p>}
+    <button type="button" className="text-xs underline focus-visible:outline focus-visible:outline-primary disabled:opacity-50" disabled={state.loading || state.busy} onClick={refresh}>Refresh suggestions</button>
     <ul className="divide-y divide-border">
       {state.data?.map(project => {
         const pending = project.status === 'pending'

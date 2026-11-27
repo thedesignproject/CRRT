@@ -37,7 +37,7 @@ it('explains cooldown and allows retries only after the server timestamp', async
 it('shows empty suggestions and refreshes on demand and window focus', async () => {
   api.suggestions.mockResolvedValue([])
   view()
-  expect(await screen.findByText(/No suggested projects/)).toBeInTheDocument()
+  expect(await screen.findByText(/No suggested projects for your email yet/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Refresh suggestions' }))
   await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(2))
   expect(changed).toHaveBeenCalledTimes(1)
@@ -64,6 +64,6 @@ it('refreshes memberships when an approved request disappears from suggestions',
   await screen.findByText('Pending approval')
   api.suggestions.mockResolvedValue([])
   fireEvent.click(screen.getByRole('button', { name: 'Refresh suggestions' }))
-  expect(await screen.findByText(/No suggested projects/)).toBeInTheDocument()
+  expect(await screen.findByText(/No suggested projects for your email yet/)).toBeInTheDocument()
   expect(changed).toHaveBeenCalledTimes(1)
 })
