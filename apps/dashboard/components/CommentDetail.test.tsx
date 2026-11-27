@@ -460,15 +460,51 @@ describe('<CommentDetail /> GitHub issue action', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  it('shows safe preparation failures and handles disconnected preparation state', async () => {
+  it('shows a safe, retryable message when preparation fails unexpectedly', async () => {
     vi.mocked(getExternalWorkDraft)
       .mockRejectedValueOnce(new Error('response contained a secret'))
+      .mockResolvedValueOnce({ provider: 'github', connected: true, destination: 'acme/site', existing: null, draft: { title: 'Title', body: 'Body' } })
+    render(<CommentDetail {...props} />)
+    await sendTo('GitHub')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent("Couldn't prepare the GitHub issue. Try again.")
+    expect(alert).not.toHaveTextContent('secret')
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(getExternalWorkDraft).toHaveBeenLastCalledWith(props.apiBase, props.accessToken, comment.id, 'github')
+  })
+
+  it('offers to connect a disconnected tracker to people who manage the project', async () => {
+    const onOpenIntegrations = vi.fn()
+    vi.mocked(getExternalWorkDraft)
+      .mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'Title', body: 'Body' } })
+    render(<CommentDetail {...props} onOpenIntegrations={onOpenIntegrations} />)
+    await sendTo('GitHub')
+    expect(await screen.findByRole('alert')).toHaveTextContent("GitHub isn't connected to this project yet.")
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }))
+    expect(onOpenIntegrations).toHaveBeenCalledTimes(1)
+  })
+
+  it('tells other people who can connect a disconnected tracker', async () => {
+    vi.mocked(getExternalWorkDraft)
       .mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'Title', body: 'Body' } })
     render(<CommentDetail {...props} />)
     await sendTo('GitHub')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Check Project Settings and try again.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ask a project manager to connect it in Project settings.')
+    expect(screen.queryByRole('button', { name: 'Connect GitHub' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    [403, 'Your project role can\'t send feedback to GitHub. Ask a project manager for access.'],
+    [404, 'This feedback was deleted or moved to another project.'],
+  ])('explains a %i preparation failure without offering a retry', async (status, message) => {
+    vi.mocked(getExternalWorkDraft).mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status }))
+    render(<CommentDetail {...props} onOpenIntegrations={vi.fn()} />)
     await sendTo('GitHub')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Check Project Settings and try again.')
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Connect GitHub' })).not.toBeInTheDocument()
   })
 
   it('opens an issue discovered during preparation and protects its opener', async () => {
@@ -726,11 +762,11 @@ describe('<CommentDetail /> GitHub issue action', () => {
     vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
     render(<CommentDetail {...props} />)
     await sendTo('Jira')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Check Project Settings')
+    expect(await screen.findByRole('alert')).toHaveTextContent("Jira isn't connected to this project yet.")
 
     vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
     await sendTo('Jira')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Jira issue')
+    expect(await screen.findByRole('alert')).toHaveTextContent("Jira isn't connected to this project yet.")
   })
 
   it('does not request connection status when no project is selected', async () => {
@@ -805,9 +841,9 @@ describe('<CommentDetail /> GitHub issue action', () => {
       .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now' }, draft: { title: '', body: '' } })
     render(<CommentDetail {...props} />)
     await sendTo('Linear')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Linear issue')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn\'t prepare the Linear issue')
     await sendTo('Linear')
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Linear issue')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn\'t prepare the Linear issue')
     await sendTo('Linear')
     await waitFor(() => expect(open).toHaveBeenCalled())
     expect(screen.queryByText('Choose a connected project integration.')).toBeNull()

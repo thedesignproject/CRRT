@@ -4,6 +4,7 @@ import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
 import { timeAgo, truncateUrl } from '../lib/format'
 import { asset } from '../lib/routes'
+import { classifyExternalWorkFailure, externalWorkFailureMessage } from '../lib/external-work-errors'
 import type { Comment } from '../lib/types'
 import {
   BotIcon,
@@ -167,6 +168,8 @@ interface CommentDetailProps {
   onConnectStorybook?: () => void
   /** Marks the empty project's Storybook step as done. */
   storybookConnected?: boolean
+  /** Opens Project settings, where trackers are connected; omitted for people who can't manage the project. */
+  onOpenIntegrations?: () => void
   bodyEditor?: ReactNode
   personalActions?: ReactNode
   /** Fetches fresh signed screenshot links after one fails to load. */
@@ -195,12 +198,15 @@ export function CommentDetail({
   readOnly = false,
   onConnectStorybook,
   storybookConnected,
+  onOpenIntegrations,
   bodyEditor,
   personalActions,
 }: CommentDetailProps | PersonalDetailProps) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const [issueBusy, setIssueBusy] = useState(false)
   const [issueError, setIssueError] = useState<string | null>(null)
+  // What the person can do about a failed "prepare issue": connect the tracker, or retry.
+  const [issueRecovery, setIssueRecovery] = useState<{ kind: 'connect' | 'retry'; provider: ExternalWorkProvider } | null>(null)
   const [syncBusy, setSyncBusy] = useState(false)
   const [createdExternalWork, setCreatedExternalWork] = useState<Record<string, ExternalWorkRecord[]>>({})
   const [pendingRecovery, setPendingRecovery] = useState(false)
@@ -241,6 +247,7 @@ export function CommentDetail({
   const openExternalWork = (work: ExternalWorkRecord) => {
     const url = safeExternalWorkUrl(work)
     if (!url) {
+      setIssueRecovery(null)
       setIssueError(`Could not open the ${providerLabel(work.provider)} issue because its link is invalid.`)
       return
     }
@@ -251,6 +258,7 @@ export function CommentDetail({
   useEffect(() => {
     setIssueBusy(selectedId !== null && issueRequests.current.has(selectedId))
     setIssueError(null)
+    setIssueRecovery(null)
     setSyncBusy(selectedId !== null && syncRequests.current.has(selectedId))
     setExternalWorkDraft(null)
   }, [selectedId])
@@ -271,6 +279,7 @@ export function CommentDetail({
     issueRequests.current.set(commentId, request)
     setIssueBusy(true)
     setIssueError(null)
+    setIssueRecovery(null)
     try {
       const prepared = await getExternalWorkDraft(apiBase, accessToken, commentId, provider)
       if (!prepared.connected) throw new Error(`${provider}_not_connected`)
@@ -282,8 +291,13 @@ export function CommentDetail({
       } else if (selectedIdRef.current === commentId) {
         setExternalWorkDraft(prepared)
       }
-    } catch {
-      if (selectedIdRef.current === commentId) setIssueError(`Could not prepare the ${providerLabel(provider)} issue. Check Project Settings and try again.`)
+    } catch (error) {
+      if (selectedIdRef.current === commentId) {
+        const failure = classifyExternalWorkFailure(error)
+        setIssueError(externalWorkFailureMessage(failure, providerLabel(provider), Boolean(onOpenIntegrations)))
+        if (failure === 'unavailable') setIssueRecovery({ kind: 'retry', provider })
+        else if (failure === 'not_connected' && onOpenIntegrations) setIssueRecovery({ kind: 'connect', provider })
+      }
     } finally {
       issueRequests.current.delete(commentId)
       if (selectedIdRef.current === commentId) setIssueBusy(false)
@@ -347,6 +361,7 @@ export function CommentDetail({
     syncRequests.current.add(commentId)
     setSyncBusy(true)
     setIssueError(null)
+    setIssueRecovery(null)
     try {
       const result = await retryExternalWorkSync(apiBase, accessToken, commentId)
       if (selectedIdRef.current === commentId) {
@@ -491,6 +506,18 @@ export function CommentDetail({
 
                   {issueError && !externalWorkDraft && (
                     <span role="alert" className="text-xs text-status-rejected">{issueError}</span>
+                  )}
+
+                  {issueError && !externalWorkDraft && issueRecovery?.kind === 'connect' && (
+                    <ActionBtn variant="neutral" onClick={onOpenIntegrations!}>
+                      Connect {providerLabel(issueRecovery.provider)}
+                    </ActionBtn>
+                  )}
+
+                  {issueError && !externalWorkDraft && issueRecovery?.kind === 'retry' && (
+                    <ActionBtn variant="neutral" disabled={issueBusy} onClick={() => { void prepareExternalWork(selectedComment, issueRecovery.provider) }}>
+                      Try again
+                    </ActionBtn>
                   )}
                 </section>
               )}
