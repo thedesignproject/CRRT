@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { Comment } from '../lib/types'
 import { NextStepsPage } from './NextStepsPage'
+import { delivery } from '../hooks/direct-delivery.fixture'
 
 const comment = (id: string, body: string): Comment => ({
   id, projectId: 'p', pageUrl: 'https://example.com', selector: 'h1', x: 0, y: 0, body,
@@ -59,4 +60,25 @@ it('explains an empty queue and agent errors', () => {
   expect(screen.queryByRole('list', { name: 'Next steps' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Upgrade plan' }))
   expect(failed.props.onUpgrade).toHaveBeenCalledOnce()
+})
+
+it('sends straight to a listening terminal and shows each delivery', () => {
+  const states: Record<string, string> = { c1: 'working', c2: 'completed', c3: 'mystery' }
+  const direct = delivery({ stateFor: (id) => states[id] })
+  render(page({ comments: [comment('c1', 'One'), comment('c2', 'Two'), comment('c3', 'Three'), comment('c4', 'Four')], direct }).ui)
+  expect(screen.queryByRole('button', { name: /to Codex/ })).toBeNull()
+  expect(screen.getByText('· Agent working')).toBeInTheDocument()
+  expect(screen.getByText('· Ready to test')).toBeInTheDocument()
+  expect(screen.getByText('· Checking delivery')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Send 3 crrts to term l1' }))
+  expect(direct.send).toHaveBeenCalledWith([expect.objectContaining({ id: 'c2' }), expect.objectContaining({ id: 'c3' }), expect.objectContaining({ id: 'c4' })])
+})
+
+it('keeps the prompt handoff when no terminal can take the send or direct send is off', () => {
+  const view = render(page({ direct: delivery({ online: false, destination: '' }) }).ui)
+  expect(screen.getByRole('button', { name: 'Send 2 crrts' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Send 2 crrts to Codex' })).toBeEnabled()
+  view.rerender(page({ direct: delivery({ enabled: false }) }).ui)
+  expect(screen.queryByRole('region', { name: 'Send to a terminal' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Send 2 crrts to Codex' })).toBeEnabled()
 })

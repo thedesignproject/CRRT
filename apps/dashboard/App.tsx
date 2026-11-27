@@ -27,6 +27,7 @@ import { DashboardShell } from './components/DashboardShell'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
 import { NextStepsPage } from './components/NextStepsPage'
+import { useDirectDelivery } from './hooks/useDirectDelivery'
 import { AgentRunsPage } from './components/AgentRunsPage'
 import { AgentLauncher } from './components/AgentLauncher'
 import { StatusBar } from './components/StatusBar'
@@ -234,14 +235,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     [comments, commentsProjectId, selectedProject],
   )
   const readyAgentCommentIds = useMemo(() => readyAgentComments.map((comment) => comment.id), [readyAgentComments])
+  const agentProject = canOpenAgentPanel && selectedProject ? selectedProject : null
   const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt, adoptSession } = useAgentSession(
     API_BASE,
     accessToken,
-    canOpenAgentPanel && selectedProject ? selectedProject : null,
+    agentProject,
     readyAgentCommentIds,
     agentView !== null,
     user.id,
   )
+  const directDelivery = useDirectDelivery(API_BASE, accessToken, agentProject, agentView === 'next-steps')
   const activeAgentShare = agentShareState
     && agentShareState.share.id === agentSession?.shareId
     && agentShareState.project.publicKey === selectedProject
@@ -946,6 +949,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onUpgrade={openAgentUpgrade}
           onOpenComment={openComment}
           onOpenRuns={() => setView('agent-runs')}
+          direct={directDelivery}
         />
       ) : agentView === 'agent-runs' ? (
         <AgentRunsPage
