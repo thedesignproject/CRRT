@@ -71,6 +71,7 @@ it('keeps the conversion navigation available after the intro', async () => {
   expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/thedesignproject/CRRT')
   expect(screen.queryByRole('link', { name: 'Capture anywhere' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Product' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Resources/ })).not.toBeInTheDocument()
 })
 
 it('preserves the navigation theme control, including its label and stored preference', async () => {
