@@ -14,7 +14,8 @@ export function getSelector(el: Element): string {
   let current: Element | null = el
 
   while (current && current !== document.body) {
-    if (isValidIdentifier(current.id)) {
+    // Duplicate ids are invalid HTML but common in repeated components; only a unique one can anchor.
+    if (isValidIdentifier(current.id) && current.ownerDocument.querySelectorAll(`#${current.id}`).length === 1) {
       parts.unshift(`#${current.id}`)
       break
     }
@@ -35,6 +36,9 @@ export function getSelector(el: Element): string {
         siblings.some(sibling => sibling !== current && sibling.classList.contains(name))
       )
       if (sharedClass) selector = tag + '.' + sharedClass
+      // Position only when ambiguous: a positional part breaks when content is inserted
+      // before it and in capture clones that omit widget nodes. Known limit: an element
+      // told apart only by a state class (is-active) follows that class when it moves.
       if (siblings.filter((sibling) => sibling.matches(selector)).length > 1) {
         const index = siblings.indexOf(current) + 1
         selector += `:nth-of-type(${index})`

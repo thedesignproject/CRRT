@@ -66,6 +66,12 @@ describe('getSelector', () => {
     expect(document.querySelector(selector)).toBe(title)
   })
 
+  it('walks past duplicate ids so repeated cards resolve to the clicked one', () => {
+    document.body.innerHTML = '<div id="card"><button>One</button></div><div id="card"><button>Two</button></div><div id="card"><button>Three</button></div>'
+    const third = document.querySelectorAll('button')[2]
+    expect(document.querySelector(getSelector(third))).toBe(third)
+  })
+
   it('keeps a repeated card selector on the original card when active state moves', () => {
     document.body.innerHTML = '<section id="reel"><ol><li class="is-active frame"><h3>Original</h3></li><li class="frame"><h3>Next</h3></li></ol></section>'
     const [first, next] = document.querySelectorAll('li')

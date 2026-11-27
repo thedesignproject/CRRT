@@ -85,6 +85,19 @@ it('resolves element-relative positions through layout changes and handles missi
   element.remove()
 })
 
+it('draws no pin for hosted feedback whose target element is gone', async () => {
+  const live = document.createElement('p'); live.id = 'live-target'; document.body.append(live)
+  vi.spyOn(live, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 60, 200, 30))
+  const at = (selector: string) => ({ selector, x: 20, y: 30, elementX: .5, elementY: .5 })
+  const feedback = [{ ...note, target: at('#live-target') }, { ...note, id: 'gone', target: at('#gone-target') }]
+  try {
+    render(<FeedbackWidget projectId="host" conversation={conversation({ feedback })} />)
+    await waitFor(() => expect(document.querySelectorAll('[data-fw-pin]')).toHaveLength(1))
+  } finally {
+    live.remove()
+  }
+})
+
 it('builds legacy quote targets and host-supplied pin targets without exposing replies as root pins', () => {
   const root = document.createElement('div'); root.className = 'document-prose'; root.innerHTML = '<p>Passage</p>'; document.body.append(root)
   expect(conversationTarget('Passage', '.document-prose').anchor?.selectedText).toBe('Passage')

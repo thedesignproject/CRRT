@@ -283,7 +283,7 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => expect(pin()).not.toBeNull())
       button.remove()
       fireEvent.resize(window)
-      await waitFor(() => expect(Boolean(pin())).toBe(kind === 'element relative'))
+      await waitFor(() => expect(pin()).toBeNull())
     } finally {
       Reflect.deleteProperty(document, 'elementsFromPoint')
       panel.remove()

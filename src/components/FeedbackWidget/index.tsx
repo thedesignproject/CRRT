@@ -494,17 +494,20 @@ function FeedbackWidgetInner({
     const ro = new ResizeObserver(bump)
     ro.observe(document.body)
 
+    // Busy pages (clocks, carousels) mutate every frame; one trailing update per 100ms keeps pins current without a per-frame re-render.
+    let mutationTimer: number | undefined
     const observer = new MutationObserver((records) => {
-      if (!needsPositionSyncRef.current) return
+      if (!needsPositionSyncRef.current || mutationTimer !== undefined) return
       if (records.some(({ target }) => {
         const element = target instanceof Element ? target : target.parentElement
         return !element?.closest(`[${WIDGET_ATTR}]`)
-      })) bump()
+      })) mutationTimer = window.setTimeout(() => { mutationTimer = undefined; bump() }, 100)
     })
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true })
 
     return () => {
       if (raf !== undefined) cancelAnimationFrame(raf)
+      window.clearTimeout(mutationTimer)
       viewport?.removeEventListener('resize', bump)
       viewport?.removeEventListener('scroll', bump)
       window.removeEventListener('resize', bump)
@@ -1624,7 +1627,8 @@ function FeedbackWidgetInner({
         const element = page ? null : findPinElement(c.selector)
         const point = pagePoint(c, element)
         if (element && !pinTargetVisible(element, point)) return null
-        if (!element && !page && !conversation && !c.anchor && c.elementX === undefined) return null
+        // A pin whose element is gone (closed modal, collapsed section) would land on unrelated content.
+        if (!element && !page) return null
         const pinPos = { left: point.fixedX, top: point.fixedY }
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id

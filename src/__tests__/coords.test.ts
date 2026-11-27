@@ -64,6 +64,20 @@ describe('coords', () => {
     try { expect(findPinElement('[')).toBeNull() } finally { query.mockRestore() }
   })
 
+  it('hides a pin whose target the browser skips, like closed <details> content', () => {
+    const target = document.createElement('p')
+    document.body.append(target)
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(new DOMRect(30, 40, 40, 40))
+    try {
+      Object.defineProperty(target, 'checkVisibility', { configurable: true, value: () => false })
+      expect(pinTargetVisible(target, { fixedX: 40, fixedY: 50 })).toBe(false)
+      Object.defineProperty(target, 'checkVisibility', { configurable: true, value: () => true })
+      expect(pinTargetVisible(target, { fixedX: 40, fixedY: 50 })).toBe(true)
+    } finally {
+      target.remove()
+    }
+  })
+
   it('uses the target box and both axes of overflow clips', () => {
     const panel = document.createElement('div')
     const target = document.createElement('button')

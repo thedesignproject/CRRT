@@ -19,6 +19,8 @@ function clipsOverflow(value: string) {
 export function pinTargetVisible(element: Element, { fixedX, fixedY }: { fixedX: number; fixedY: number }) {
   const rect = element.getBoundingClientRect()
   if (!rect.width && !rect.height) return false
+  // Closed <details> content keeps a box but is skipped by the browser; checkVisibility sees that.
+  if (element.checkVisibility?.() === false) return false
   const style = getComputedStyle(element)
   if (style.visibility === 'hidden' || style.visibility === 'collapse') return false
 
