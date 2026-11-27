@@ -26,6 +26,17 @@ it('creates, reloads, edits, and removes feedback without contacting an API', as
   expect(fetch).not.toHaveBeenCalled()
 })
 
+it('finds older fragment URLs on reload through the widget page identity', async () => {
+  const demo = createDemoComments()
+  const pinned = await demo.create({ ...payload, pageUrl: 'https://crrt.ai/#pricing' })
+  const reloaded = createDemoComments()
+
+  expect(await reloaded.list('https://crrt.ai/')).toEqual([pinned])
+  expect(await reloaded.list('https://crrt.ai/#install')).toEqual([pinned])
+  expect(await reloaded.list('https://crrt.ai/?plan=team#pricing')).toEqual([])
+  expect(await reloaded.list('https://other.example/#pricing')).toEqual([])
+})
+
 it('still accepts feedback when session storage is disabled', async () => {
   vi.spyOn(sessionStorage, 'getItem').mockImplementation(() => { throw new Error('disabled') })
   vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => { throw new Error('disabled') })

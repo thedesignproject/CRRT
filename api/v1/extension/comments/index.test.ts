@@ -19,6 +19,17 @@ beforeEach(() => {
 })
 
 describe('extension comments collection endpoint', () => {
+  it('preserves pagination and negotiates point anchors with extension widgets', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
+    const point = { id: 'point', targetType: 'element_point', anchor: { elementX: 0, elementY: 1 } }
+    const result = { items: [point], page: 1, limit: 20, total: 1 }
+    vi.mocked(listExtensionComments).mockResolvedValue(result as never)
+    const old = res(), current = res()
+    await call({ method: 'GET', query: {}, headers: {} }, old)
+    await call({ method: 'GET', query: { elementPointAnchors: '1' }, headers: {} }, current)
+    expect(old.body).toEqual({ ...result, items: [{ ...point, anchor: null }] })
+    expect(current.body).toEqual(result)
+  })
   it('handles preflight, method, and authentication gates', async () => {
     let response = res(); await call({ method: 'OPTIONS', headers: {} }, response); expect(response.statusCode).toBe(204)
     response = res(); await call({ method: 'DELETE', headers: {} }, response); expect(response.statusCode).toBe(405)

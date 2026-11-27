@@ -12,6 +12,13 @@ it('binds an atomic import to the authenticated actor and normalizes local feedb
  expect(rpc).toHaveBeenCalledWith('import_cloud_feedback',expect.objectContaining({p_actor:'actor',p_comments:[expect.objectContaining({pageUrl:'https://example.com/',pageHostname:'example.com',screenshotStoragePath:null})]}))
  expect(upload).not.toHaveBeenCalled()
 })
+it('passes the clean selector and separate element point to the import RPC', async () => {
+ const anchor = { elementX: .2, elementY: .8 }
+ await importLocalFeedback('actor', { ...input, comments: [{ ...comment, selector: '#buy', targetType: 'element_point', anchor }] })
+ expect(rpc).toHaveBeenCalledWith('import_cloud_feedback', expect.objectContaining({
+  p_comments: [expect.objectContaining({ selector: '#buy', targetType: 'element_point', anchor })],
+ }))
+})
 it('imports private screenshots under deterministic actor paths and reuses uploads on retry',async()=>{
  const withImage={...input,comments:[{...comment,imageUrl:'data:image/png;base64,aGk='}]}
  rpc.mockResolvedValue({data:{projectId:'project',imported:1,screenshots:[{id:comment.id,path:'actor/imports/'+comment.id+'.png'}]},error:null})

@@ -52,11 +52,11 @@ it('opens Agent in place after login and refreshes the authenticated feed after 
   await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
   await act(async () => { fireEvent.click(screen.getByText('Log in to CRRT')) })
   await waitFor(() => expect(screen.getByText('Agent feedback')).toBeInTheDocument())
-  const authenticatedListsBefore = request.mock.calls.filter(([input]) => String(input).endsWith('/v1/widget/comments')).length
+  const authenticatedListsBefore = request.mock.calls.filter(([input]) => String(input).endsWith('/v1/widget/comments?elementPointAnchors=1')).length
 
   await act(async () => { fireEvent.click(screen.getByText('Accept')) })
   await waitFor(() => {
-    const authenticatedListsAfter = request.mock.calls.filter(([input]) => String(input).endsWith('/v1/widget/comments')).length
+    const authenticatedListsAfter = request.mock.calls.filter(([input]) => String(input).endsWith('/v1/widget/comments?elementPointAnchors=1')).length
     expect(authenticatedListsAfter).toBeGreaterThan(authenticatedListsBefore)
   })
   const mutation = request.mock.calls.find(([input]) => String(input).endsWith('/v1/widget/feedback'))

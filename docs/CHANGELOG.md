@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Touch screens show an Exit button while choosing what to comment on, so you can leave comment mode without a keyboard.
+
+### Fixed
+- Comment screenshots show the element you selected. Previously, scrolling right after a click, smooth scrolling, or entrance animations could capture a different part of the page or a blank area, as on the crrt.ai home page.
+- Comments on selected text now include a screenshot of the selection.
+- Pins stay on their spot in the element through scrolling, resizing, switching between desktop and mobile widths, and content loading above them, including on iPhone Safari. Pins hide while their element is hidden or scrolled out of its panel.
+- Saved screenshots stored in the page open when clicked, instead of opening a blank tab.
+- On narrow screens, the launcher no longer covers the screenshot while you write a comment.
+
 ## [0.3.27] - Unreleased
 
 ### Fixed

@@ -1,10 +1,10 @@
 import { browser } from 'wxt/browser'
-import type { Comment, PersonalComments } from '../../../src/components/FeedbackWidget/types'
+import type { WireComment, PersonalComments } from '../../../src/components/FeedbackWidget/types'
 
 export const LOCAL_FEEDBACK_KEY = 'crrt:local-feedback-v1'
 export const LOCAL_COMMENT_LIMIT = 50
 const STORAGE_BYTES = 8 * 1024 * 1024
-export type LocalWorkspace = { version: 1; name: string; comments: Comment[] }
+export type LocalWorkspace = { version: 1; name: string; comments: WireComment[] }
 export async function readLocalWorkspace(): Promise<LocalWorkspace> {
   const stored = (await browser.storage.local.get(LOCAL_FEEDBACK_KEY))[LOCAL_FEEDBACK_KEY] as LocalWorkspace | undefined
   return stored ?? { version: 1, name: 'Local feedback', comments: [] }
@@ -27,7 +27,7 @@ function normalizePage(pageUrl: string) {
   url.hash = ''
   return url.href
 }
-export async function createLocalComment(payload: Record<string, unknown>): Promise<Comment> {
+export async function createLocalComment(payload: Record<string, unknown>): Promise<WireComment> {
   if (typeof payload.body !== 'string' || !payload.body.trim() || payload.body.length > 5000
     || typeof payload.selector !== 'string' || !payload.selector || typeof payload.pageUrl !== 'string'
     || typeof payload.x !== 'number' || !Number.isFinite(payload.x)
@@ -37,11 +37,11 @@ export async function createLocalComment(payload: Record<string, unknown>): Prom
   if (imageUrl && (imageUrl.length > 3_000_000 || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(imageUrl))) {
     throw new Error('Use a PNG, JPEG or WebP screenshot smaller than 2 MB')
   }
-  const comment: Comment = {
+  const comment: WireComment = {
     id: crypto.randomUUID(), projectId: 'local', pageUrl, x: payload.x, y: payload.y,
     selector: payload.selector, body: payload.body.trim(), imageUrl, reviewStatus: 'open',
     createdAt: new Date().toISOString(), authorName: 'You', editable: true,
-    targetType: payload.targetType as Comment['targetType'], anchor: payload.anchor as Comment['anchor'],
+    targetType: payload.targetType as WireComment['targetType'], anchor: payload.anchor as WireComment['anchor'],
   }
   return mutate(workspace => {
     if (workspace.comments.length >= LOCAL_COMMENT_LIMIT) throw new Error('Local mode stores up to 50 comments. Export or delete feedback, or start a Cloud trial.')

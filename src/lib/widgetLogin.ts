@@ -33,7 +33,7 @@ export async function widgetRequest(apiBase: string, path: string, session: Widg
 export function widgetComments(apiBase: string, projectKey: string, session: WidgetLoginSession): PersonalComments {
   return {
     label: 'My feedback',
-    list: async () => (await widgetRequest(apiBase, '/v1/widget/comments', session)).json(),
+    list: async () => (await widgetRequest(apiBase, '/v1/widget/comments?elementPointAnchors=1', session)).json(),
     create: async (payload) => (await widgetRequest(apiBase, '/v1/public/comments', session, {
       method: 'POST', body: JSON.stringify({ ...payload, projectKey }),
     })).json(),

@@ -4,7 +4,7 @@ import { waitUntil } from '@vercel/functions'
 import { getProject, createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listPublicComments, updatePublicReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
-import { parseCommentTarget } from '../../_lib/anchor.js'
+import { parseCommentTarget, widgetCommentList } from '../../_lib/anchor.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import { notifyProjectMembersOfCommentActivityInBackground, sendCommentActivityEmailInBackground } from '../../_lib/comment-activity.js'
@@ -109,7 +109,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     const comments = await listPublicComments(projectKey, pageUrl ? { pageUrl } : {})
 
     setCors(req, res, METHODS)
-    return res.status(200).json(comments)
+    return res.status(200).json(widgetCommentList(comments, req.query.elementPointAnchors))
   } catch (error) {
     return publicRequestError(req, res, error)
   }

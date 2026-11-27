@@ -84,7 +84,7 @@ function aiEndpoint() {
 }
 
 function aiInput(comment: GithubIssueComment) {
-  const anchor = comment.anchor
+  const anchor = comment.targetType === 'text_range' && comment.anchor
     ? Object.fromEntries([
         ['selectedText', MAX_AI_ANCHOR_TEXT],
         ['prefix', 64],

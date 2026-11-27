@@ -6,6 +6,7 @@ import type { ToolSpec } from './transport.js'
 import { safeUrl } from './urls.js'
 import { buildMcpPrompt } from '../../api/_lib/prompts.js'
 import { config } from './auth.js'
+import { readElementPoint } from '../../src/lib/elementPoint.js'
 
 function screenshot(raw: string | null) {
   if (!raw) return null
@@ -24,13 +25,17 @@ export function detail(item: StoredComment, bodyLimit = 8000) {
     return value.slice(0, max)
   }
   const anchor: Record<string, string | number> = {}
-  for (const [key, max] of Object.entries(anchorFields)) {
-    const value = item.anchor?.[key]
-    if (typeof value === 'string') anchor[key] = text(value, max, `anchor.${key}`)!
-  }
-  for (const key of ['startOffset', 'endOffset']) {
-    const value = item.anchor?.[key]
-    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) anchor[key] = value
+  if (item.targetType === 'text_range') {
+    for (const [key, max] of Object.entries(anchorFields)) {
+      const value = item.anchor?.[key]
+      if (typeof value === 'string') anchor[key] = text(value, max, `anchor.${key}`)!
+    }
+    for (const key of ['startOffset', 'endOffset']) {
+      const value = item.anchor?.[key]
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) anchor[key] = value
+    }
+  } else {
+    Object.assign(anchor, readElementPoint(item.anchor))
   }
   const screenshotUrl = screenshot(item.imageUrl)
   return { id: item.id, projectId: item.projectId, body: text(item.body, bodyLimit, 'body')!, bodyTruncated: item.body.length > bodyLimit,

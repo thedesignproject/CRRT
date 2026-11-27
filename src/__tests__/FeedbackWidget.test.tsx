@@ -5,6 +5,8 @@ import type { Comment, PersonalComments } from '../components/FeedbackWidget/typ
 
 const screenshotMock = vi.hoisted(() => ({
   result: 'ready' as 'ready' | 'capturing' | 'failed',
+  focus: vi.fn(),
+  focusSource: vi.fn<(focus: () => unknown) => void>(),
 }))
 
 // useScreenshotCapture defers to html2canvas which can't run in happy-dom.
@@ -24,7 +26,11 @@ vi.mock('../lib/screenshotCapture', async () => {
         image,
         previewUrl: image ? 'blob:mock' : null,
         status,
-        capture: () => {
+        capture: (focus?: () => unknown) => {
+          if (typeof focus === 'function') {
+            screenshotMock.focusSource(focus)
+            screenshotMock.focus(focus())
+          }
           setImage(null)
           setStatus(screenshotMock.result)
           if (screenshotMock.result === 'ready') {
@@ -217,7 +223,7 @@ describe('<FeedbackWidget />', () => {
 
     await waitFor(() => {
       const getCall = calls.find((c) => !c.init || c.init.method === undefined)
-      expect(getCall?.url).toBe('https://x.example/api/v1/public/comments?projectKey=my-site')
+      expect(getCall?.url).toBe('https://x.example/api/v1/public/comments?projectKey=my-site&elementPointAnchors=1')
     })
   })
 
@@ -226,7 +232,7 @@ describe('<FeedbackWidget />', () => {
     render(<FeedbackWidget projectId="acme/internal" apiBase="https://x.example/api" />)
 
     await waitFor(() => {
-      expect(calls[0]?.url).toBe('https://x.example/api/v1/public/comments?projectKey=acme%2Finternal')
+      expect(calls[0]?.url).toBe('https://x.example/api/v1/public/comments?projectKey=acme%2Finternal&elementPointAnchors=1')
     })
   })
 
@@ -235,6 +241,135 @@ describe('<FeedbackWidget />', () => {
     render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
     const roots = document.querySelectorAll('[data-fw]')
     expect(roots.length).toBeGreaterThan(0)
+  })
+
+  it.each(['legacy percent', 'element relative'])('hides a %s pin until its target returns to view', async kind => {
+    const panel = document.createElement('div')
+    const button = document.createElement('button')
+    button.id = 'pin-visibility-target'
+    panel.style.overflowY = 'auto'
+    panel.append(button)
+    document.body.append(panel)
+    Object.defineProperty(panel, 'clientHeight', { value: 120 })
+    panel.getBoundingClientRect = () => new DOMRect(0, 100, 400, 120)
+    Object.defineProperty(document, 'elementsFromPoint', { configurable: true, value: () => [] })
+    const rect = vi.fn(() => new DOMRect(10, 130, 100, 40))
+    button.getBoundingClientRect = rect
+    const pageUrl = window.location.href.split('#')[0]
+    const point = kind === 'element relative'
+      ? { targetType: 'element_point', anchor: { elementX: .5, elementY: .5 } }
+      : {}
+    mockFetch(undefined, () => new Response(JSON.stringify([{
+      id: 'visibility-pin', projectId: 'proj', pageUrl, selector: '#pin-visibility-target',
+      x: 160, y: 150, body: 'Feedback still in sidebar', reviewStatus: 'open',
+      createdAt: '2026-11-27T00:00:00Z', ...point,
+    }])))
+    try {
+      render(<FeedbackWidget projectId="proj" />)
+      const pin = () => document.querySelector('[data-fw-pin]')
+      await waitFor(() => expect(pin()).not.toBeNull())
+      rect.mockReturnValue(new DOMRect())
+      fireEvent.resize(window)
+      await waitFor(() => expect(pin()).toBeNull())
+      expect(document.body.textContent).toContain('Feedback still in sidebar')
+      rect.mockReturnValue(new DOMRect(10, 130, 100, 40))
+      fireEvent.resize(window)
+      await waitFor(() => expect(pin()).not.toBeNull())
+      rect.mockReturnValue(new DOMRect(10, 35, 100, 40))
+      fireEvent.scroll(panel)
+      await waitFor(() => expect(pin()).toBeNull())
+      rect.mockReturnValue(new DOMRect(10, 130, 100, 40))
+      fireEvent.scroll(panel)
+      await waitFor(() => expect(pin()).not.toBeNull())
+      button.remove()
+      fireEvent.resize(window)
+      await waitFor(() => expect(Boolean(pin())).toBe(kind === 'element relative'))
+    } finally {
+      Reflect.deleteProperty(document, 'elementsFromPoint')
+      panel.remove()
+    }
+  })
+
+  it('follows geometry-only transitions and stops syncing them after they settle', async () => {
+    const track = document.createElement('section')
+    const card = document.createElement('article')
+    card.id = 'moving-card'
+    track.append(card)
+    document.body.append(track)
+    let left = 100
+    card.getBoundingClientRect = () => new DOMRect(left, 150, 200, 40)
+    const pageUrl = window.location.href.split('#')[0]
+    mockFetch(undefined, () => new Response(JSON.stringify([{
+      id: 'moving-pin', projectId: 'proj', pageUrl, selector: '#moving-card',
+      x: 10, y: 10, body: 'Keep up', reviewStatus: 'open', createdAt: '2026-11-27T00:00:00Z',
+      targetType: 'element_point', anchor: { elementX: .5, elementY: .5 },
+    }])))
+
+    const event = (node: EventTarget, propertyName: string) => {
+      const transition = new Event('transitionrun', { bubbles: true })
+      Object.defineProperty(transition, 'propertyName', { value: propertyName })
+      node.dispatchEvent(transition)
+    }
+    let resolve!: () => void
+    let reject!: () => void
+    const finished = new Promise<void>((ok, fail) => { resolve = ok; reject = fail })
+    let animations: object[] = [{}, { transitionProperty: 'opacity' }, { transitionProperty: 'transform', finished }]
+    const { unmount } = render(<FeedbackWidget projectId="proj" />)
+    try {
+      const pinLeft = () => document.querySelector<HTMLElement>('[data-fw-pin]')?.style.left
+      await waitFor(() => expect(pinLeft()).toBe('200px'))
+      event(document, 'transform')
+      event(document.querySelector('[data-fw]')!, 'transform')
+      event(track, 'opacity')
+      event(track, 'transform')
+      Object.defineProperty(track, 'getAnimations', { value: () => animations })
+      event(track, 'scale')
+      event(track, 'transform')
+
+      left = 250
+      await waitFor(() => expect(pinLeft()).toBe('350px'))
+      left = 370
+      await waitFor(() => expect(pinLeft()).toBe('470px'))
+      left = 400
+      await act(async () => resolve())
+      await waitFor(() => expect(pinLeft()).toBe('500px'))
+      left = 410
+      await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))
+      expect(pinLeft()).toBe('500px')
+
+      animations = [{ transitionProperty: 'transform', finished: new Promise<void>((_ok, fail) => { reject = fail }) }]
+      event(track, 'transform')
+      unmount()
+      await act(async () => reject())
+    } finally {
+      track.remove()
+    }
+  })
+
+  it('keeps project feedback from a fragment URL on the same page', async () => {
+    const pageUrl = window.location.href.split('#')[0]
+    mockFetch(undefined, () => new Response(JSON.stringify([{
+      id: 'fragment-pin', projectId: 'proj', pageUrl: pageUrl + '#pricing', selector: 'body',
+      x: 20, y: 30, body: 'Feedback for pricing', reviewStatus: 'open', createdAt: '2026-11-27T00:00:00Z',
+    }])))
+    render(<FeedbackWidget projectId="proj" />)
+    await waitFor(() => expect(document.querySelector('[data-fw-pin]')).not.toBeNull())
+  })
+
+  it('keeps the launcher clear of the mobile screenshot row while composing', async () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(393)
+    mockFetch()
+    render(<FeedbackWidget projectId="proj" />)
+    const launcher = document.querySelector<HTMLElement>('[data-fw-launcher-root]')!
+    expect(launcher.style.visibility).toBe('')
+    const { targetNode } = await enterCommentingMode()
+    try {
+      expect(launcher.style.visibility).toBe('hidden')
+      fireEvent.keyDown(window, { key: 'Escape' })
+      await waitFor(() => expect(launcher.style.visibility).toBe(''))
+    } finally {
+      targetNode.remove()
+    }
   })
 
   it('launches the extension recorder from the composer when an adapter is available', async () => {
@@ -552,6 +687,73 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
+  describe('selection press interception', () => {
+    function press(node: EventTarget, options: PointerEventInit = {}) {
+      const event = new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, isPrimary: true, clientX: 120, clientY: 200, ...options,
+      })
+      node.dispatchEvent(event)
+      return event
+    }
+
+    it('stops page press handlers and keeps the original element and point when click retargets', async () => {
+      document.body.insertAdjacentHTML('beforeend', '<nav id="press-nav"><a href="/next"><span id="press-label">Getting Started</span></a></nav>')
+      const nav = document.querySelector('#press-nav')!
+      const label = nav.querySelector('#press-label')!
+      const navigate = vi.fn()
+      nav.addEventListener('pointerdown', navigate, true)
+      const create = vi.fn(personalCommentsAdapter([]).create)
+      render(<FeedbackWidget projectId="proj" personalComments={personalCommentsAdapter([], { create })} />)
+      try {
+        press(label)
+        expect(navigate).toHaveBeenCalledTimes(1)
+        fireEvent.keyDown(window, { key: 'c' })
+        // The widget must leave the native default available for text dragging.
+        expect(press(label).defaultPrevented).toBe(false)
+        expect(navigate).toHaveBeenCalledTimes(1)
+        fireEvent.click(nav, { detail: 1, clientX: 180, clientY: 250 })
+        expect(screenshotMock.focus).toHaveBeenLastCalledWith({ element: label, rect: label.getBoundingClientRect() })
+        const textarea = await waitFor(() => document.querySelector('textarea')!)
+        fireEvent.change(textarea, { target: { value: 'Inspect this label' } })
+        fireEvent.click(document.querySelector('[data-fw] button[aria-label="Send"]')!)
+        await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
+          selector: '#press-label', anchor: { elementX: .15, elementY: 1 / 3 },
+        })))
+      } finally {
+        nav.remove()
+      }
+    })
+
+    it('leaves widget, non-primary and modified presses alone and discards a canceled press', () => {
+      const host = document.createElement('div')
+      host.innerHTML = '<span id="other-press"></span><button data-fw>Widget</button>'
+      document.body.append(host)
+      const node = host.firstElementChild!
+      const listener = vi.fn()
+      host.addEventListener('pointerdown', listener, true)
+      render(<FeedbackWidget projectId="proj" personalComments={personalCommentsAdapter([])} />)
+      try {
+        fireEvent.keyDown(window, { key: 'c' })
+        const ignored = [
+          { isPrimary: false }, { button: 1 }, { metaKey: true }, { ctrlKey: true },
+          { shiftKey: true }, { altKey: true },
+        ]
+        ignored.forEach(options => press(node, options))
+        press(document)
+        press(host.lastElementChild!)
+        press(document.body)
+        expect(listener).toHaveBeenCalledTimes(ignored.length + 1)
+        fireEvent.click(host.lastElementChild!, { detail: 1 })
+        press(node)
+        fireEvent.pointerCancel(node)
+        fireEvent.click(host, { detail: 1 })
+        expect(screenshotMock.focus).toHaveBeenLastCalledWith({ element: host, rect: host.getBoundingClientRect() })
+      } finally {
+        host.remove()
+      }
+    })
+  })
+
   describe('submit flow', () => {
     it('POSTs the comment and stays ready to drop another pin without opening the sidebar', async () => {
       const calls = mockFetch()
@@ -569,7 +771,9 @@ describe('<FeedbackWidget />', () => {
         expect(body.projectKey).toBe('proj')
         expect(body.body).toBe('bug here')
         expect(typeof body.selector).toBe('string')
-        expect(body.selector.length).toBeGreaterThan(0)
+        expect(body.selector).not.toContain('/*')
+        expect(body.targetType).toBe('element_point')
+        expect(body.anchor).toEqual({ elementX: .15, elementY: 1 / 3 })
       })
 
       await waitFor(() => {
@@ -597,6 +801,8 @@ describe('<FeedbackWidget />', () => {
         if (!document.querySelector('textarea')) throw new Error('textarea not mounted for next pin')
       })
       expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
+      targetNode.remove()
+      expect(screenshotMock.focusSource.mock.lastCall?.[0]()).toBeNull()
     })
 
     it('shows an error and keeps the draft when the public API rejects a send', async () => {
@@ -739,6 +945,8 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('selecting mode', () => {
+    const touchExit = () => document.querySelector<HTMLButtonElement>('button[aria-label="Exit comment mode"]')
+
     it('renders the instruction bar with the Esc keybind hint', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
@@ -765,6 +973,74 @@ describe('<FeedbackWidget />', () => {
       const instruction = badge?.closest('[data-fw]') as HTMLDivElement | null
       expect(instruction?.getAttribute('style')).toMatch(/bottom:\s*24px/)
       expect(instruction?.getAttribute('style')).not.toMatch(/top:\s*16px/)
+      expect(touchExit()).toBeNull()
+    })
+
+    it('offers touch exit after the post-send hint and leaves the saved pin in idle mode', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      const { textarea, getSendButton, targetNode } = await enterCommentingMode()
+      expect(touchExit()).toBeNull()
+      const onPageClick = vi.fn()
+      targetNode.addEventListener('click', onPageClick)
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        fireEvent.change(textarea, { target: { value: 'Saved before exiting' } })
+        await act(async () => { fireEvent.click(getSendButton()) })
+        expect(document.body.textContent).toContain('Drop another or review comments')
+        expect(touchExit()).toBeNull()
+
+        await act(async () => { await vi.advanceTimersByTimeAsync(2200) })
+        const pin = document.querySelector('[data-fw-pin]')
+        expect(pin).not.toBeNull()
+        expect(touchExit()).toHaveTextContent('Exit')
+        expect(touchExit()).toHaveAttribute('data-fw')
+        fireEvent.click(touchExit()!)
+        expect(touchExit()).toBeNull()
+        expect(document.querySelector('[data-fw-pin]')).toBe(pin)
+        fireEvent.click(targetNode)
+        expect(onPageClick).toHaveBeenCalledOnce()
+        expect(document.querySelector('textarea')).toBeNull()
+      } finally {
+        vi.useRealTimers()
+        targetNode.remove()
+      }
+    })
+
+    it('hides touch exit while the sidebar, agent panel or name dialog is open', () => {
+      mockFetch()
+      const view = render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      const press = (key: string, shiftKey = false) => fireEvent.keyDown(window, { key, shiftKey })
+      press('c')
+      fireEvent.click(view.getByRole('button', { name: 'exit' }))
+      press('c')
+      expect(touchExit()).not.toBeNull()
+      press('f')
+      expect(touchExit()).toBeNull()
+      press('f')
+      expect(touchExit()).not.toBeNull()
+      fireEvent.click(document.body)
+      expect(document.querySelector('input[placeholder^="e.g."]')).not.toBeNull()
+      expect(touchExit()).toBeNull()
+      press('Escape')
+      expect(touchExit()).not.toBeNull()
+      press('A', true)
+      expect(document.querySelector('[data-fw-agent-dialog]')).not.toBeNull()
+      expect(touchExit()).toBeNull()
+    })
+
+    it('gates touch exit and both tap targets on a coarse pointer', () => {
+      mockFetch()
+      const view = render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      const style = view.container.querySelector('style')!
+      const rules = Array.from(style.sheet!.cssRules)
+      const exit = rules.find(rule => rule.cssText.startsWith('[data-fw-crrt] .fw-touch-selection-exit'))
+      expect(exit?.cssText).toContain('display: none')
+      const touch = rules.find(rule => rule.cssText.startsWith('@media (any-pointer: coarse)'))
+      expect(touch?.cssText).toMatch(/\.fw-touch-selection-exit\s*\{[^}]*display:\s*inline-flex/)
+      expect(touch?.cssText).toMatch(/\.fw-touch-selection-exit,\s*\[data-fw-crrt\] \.fw-selecting-instruction-action\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/)
+      expect(style.textContent).toContain('bottom: calc(24px + env(safe-area-inset-bottom, 0px))')
     })
   })
 
@@ -834,10 +1110,12 @@ describe('<FeedbackWidget />', () => {
       })
     }
 
-    it('clicking with selected text opens the popover and POSTs a text_range anchor', async () => {
+    it('captures selected text and sends the screenshot with its text_range anchor', async () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { p } = appendCopyTarget()
+      const selectionRect = new DOMRect(60, 100, 84, 18)
+      vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue(selectionRect)
       await startSelecting()
 
       // 'selectable' spans [5, 15) of the paragraph text
@@ -850,7 +1128,8 @@ describe('<FeedbackWidget />', () => {
 
       const textarea = await getTextarea()
       expect(document.body.textContent).toContain('“selectable”')
-      expect(document.body.textContent).not.toContain('Screenshot')
+      expect(document.querySelector('img[alt="captured viewport"]')).not.toBeNull()
+      expect(screenshotMock.focus).toHaveBeenLastCalledWith({ element: p, rect: selectionRect })
       fireEvent.change(textarea, { target: { value: 'tighten this copy' } })
       fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
 
@@ -866,8 +1145,8 @@ describe('<FeedbackWidget />', () => {
         expect(body.anchor.containerSelector).toBe(body.selector)
         expect(body.anchor.createdFromUrl).toBe(window.location.href)
         expect(body.anchor.createdAtViewport).toBeDefined()
-        expect(body.imageBase64).toBeUndefined()
-        expect(body.imageMimeType).toBeUndefined()
+        expect(body.imageBase64).toBe('eA==')
+        expect(body.imageMimeType).toBe('image/png')
         // happy-dom reports scrollWidth/Height of 0, so the page-percent
         // values are not meaningful here — just assert they're sent.
         expect('x' in body).toBe(true)
@@ -877,6 +1156,8 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain('tighten this copy')
       })
+      p.remove()
+      expect(screenshotMock.focusSource.mock.lastCall?.[0]()).toBeNull()
     })
 
     it('skips the name modal when the author name is already stored', async () => {
@@ -918,8 +1199,8 @@ describe('<FeedbackWidget />', () => {
         const post = calls.find((c) => c.init?.method === 'POST')
         expect(post).toBeDefined()
         const body = JSON.parse(String(post?.init?.body))
-        expect('targetType' in body).toBe(false)
-        expect('anchor' in body).toBe(false)
+        expect(body.targetType).toBe('element_point')
+        expect(body.anchor).toEqual({ elementX: 0, elementY: 0 })
       })
     })
 
@@ -1125,8 +1406,8 @@ describe('<FeedbackWidget />', () => {
         const post = calls.find((c) => c.init?.method === 'POST')
         expect(post).toBeDefined()
         const body = JSON.parse(String(post?.init?.body))
-        expect('targetType' in body).toBe(false)
-        expect('anchor' in body).toBe(false)
+        expect(body.targetType).toBe('element_point')
+        expect(body.anchor).toEqual({ elementX: 0, elementY: 0 })
       })
     })
 
@@ -1152,8 +1433,8 @@ describe('<FeedbackWidget />', () => {
         const post = calls.find((c) => c.init?.method === 'POST')
         expect(post).toBeDefined()
         const body = JSON.parse(String(post?.init?.body))
-        expect('targetType' in body).toBe(false)
-        expect('anchor' in body).toBe(false)
+        expect(body.targetType).toBe('element_point')
+        expect(body.anchor).toEqual({ elementX: 0, elementY: 0 })
       })
     })
 
@@ -1634,6 +1915,43 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('end-to-end submit + approve flow', () => {
+    it('preserves a legacy extension target without element offsets', async () => {
+      const calls = mockFetch()
+      const store: Record<string, string> = { 'fw-crrt-author-name': 'Test User' }
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => store[k] ?? null,
+        setItem: (k: string, v: string) => { store[k] = v },
+        removeItem: (k: string) => { delete store[k] },
+        clear: () => { for (const k of Object.keys(store)) delete store[k] },
+        key: () => null,
+        length: 0,
+      })
+      const url = 'https://site.test/page'
+      const page = {
+        url, width: 800, height: 600, scrollX: 0, scrollY: 0, liveIds: [],
+        capture: async () => null, selecting: vi.fn(), track: vi.fn(), highlight: vi.fn(),
+      }
+      const props = { projectId: 'proj', apiBase: 'https://x.example/api' }
+      const { rerender } = render(<FeedbackWidget {...props} page={page} />)
+      rerender(<FeedbackWidget {...props} page={{ ...page, target: { selector: '#buy', url, x: .2, y: .3 } }} />)
+
+      const textarea = await waitFor(() => {
+        const input = document.querySelector('textarea')
+        if (!input) throw new Error('Comment composer did not open')
+        return input
+      })
+      fireEvent.change(textarea, { target: { value: 'Keep this pin' } })
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
+
+      await waitFor(() => {
+        const post = calls.find(call => call.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect(body).toMatchObject({ selector: '#buy', x: .2, y: .3 })
+        expect(body).not.toHaveProperty('anchor')
+      })
+    })
+
     it('captures a comment, surfaces it in the sidebar, and approves it through the pin detail popover', async () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
@@ -3016,7 +3334,7 @@ describe('<FeedbackWidget />', () => {
       })
 
       await act(async () => { fireEvent.click(img) })
-      expect(openSpy).toHaveBeenCalledWith('https://example.com/card.png', '_blank')
+      expect(openSpy).toHaveBeenCalledWith('https://example.com/card.png', '_blank', 'noopener,noreferrer')
     })
 
     it('resolved comment imageUrl shows greyed-out filter (line 1384)', async () => {
@@ -3996,7 +4314,7 @@ describe('<FeedbackWidget />', () => {
           return el
         })
         await act(async () => { fireEvent.click(popoverImage) })
-        expect(openSpy).toHaveBeenCalledWith('https://x.example/shot.png', '_blank')
+        expect(openSpy).toHaveBeenCalledWith('https://x.example/shot.png', '_blank', 'noopener,noreferrer')
       } finally {
         window.open = origOpen
       }

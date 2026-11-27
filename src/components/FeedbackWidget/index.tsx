@@ -3,21 +3,24 @@ import { useWidgetLogin } from './useWidgetLogin'
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot, MessageCircle, PanelRightOpen, Video, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
-import { buildTextRangeAnchor } from '../../lib/textAnchor'
+import { buildTextRangeAnchor, getRangeRect, restoreTextRange } from '../../lib/textAnchor'
+import { layoutViewportOrigin } from '../../lib/layoutViewport'
+import { readElementPoint } from '../../lib/elementPoint'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { samePage } from '../../lib/pageIdentity'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
-import { fromPagePercentFixed, toPagePercent } from './coords'
+import { clientToPagePercent, elementOffset, findPinElement, fromPagePercentFixed, pinTargetVisible } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
-import { deleteComment as apiDeleteComment, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import { deleteComment as apiDeleteComment, fetchProjectComments, normalizeCommentAnchor, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { ensureWidgetFonts } from './fonts'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
-import { SelectingInstructionBar } from './selecting'
+import { SelectingInstructionBar, TouchSelectionExit } from './selecting'
 import { TextRangeQuote } from './quote'
+import { openScreenshot } from './openScreenshot'
 import { listenForWidgetEvent } from './events'
 import { SpeechInputButton } from './voice'
 import { SelectorFrame } from './SelectorFrame'
@@ -25,24 +28,6 @@ import { ConversationDetails, conversationComments, conversationSelector, conver
 
 function clearNativeSelection() {
   window.getSelection()?.removeAllRanges()
-}
-
-function getElementFixedPos(
-  selector: string,
-  xPct: number,
-  yPct: number,
-): { left: number; top: number } | null {
-  try {
-    const el = document.querySelector(selector)
-    if (!el) return null
-    const rect = (el as HTMLElement).getBoundingClientRect()
-    if (rect.width === 0 && rect.height === 0) return null
-    const pageX = (xPct / 100) * document.documentElement.scrollWidth
-    const pageY = (yPct / 100) * document.documentElement.scrollHeight
-    return { left: pageX - window.scrollX, top: pageY - window.scrollY }
-  } catch {
-    return null
-  }
 }
 
 function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
@@ -466,36 +451,70 @@ function FeedbackWidgetInner({
     if (pillLeaveTimer.current) window.clearTimeout(pillLeaveTimer.current)
   }, [])
 
-  // Pins/popovers use position:fixed, so their viewport coords must be recomputed
-  // on scroll (and on resize / body reflow, which shift the page-percent mapping).
-  // RAF-coalesced and gated by needsPositionSyncRef so idle pages stay cheap.
+  // Fixed pins and popovers are positioned from current layout on the next frame.
   const [, forceUpdate] = useState(0)
   const needsPositionSyncRef = useRef(false)
   useEffect(() => {
-    let raf = 0
+    let raf: number | undefined
+    const moving = new Set<Animation>()
     const bump = () => {
-      if (!needsPositionSyncRef.current) return
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => forceUpdate(n => n + 1))
+      if (!needsPositionSyncRef.current || raf !== undefined) return
+      raf = requestAnimationFrame(() => {
+        raf = undefined
+        forceUpdate(n => n + 1)
+        if (moving.size) bump()
+      })
     }
 
-    function onResize() {
+    const onTransitionRun = (event: TransitionEvent) => {
+      const { target, propertyName } = event
+      if (!/^(transform|translate|rotate|scale)$/.test(propertyName)) return
+      if (!(target instanceof Element) || target.closest(`[${WIDGET_ATTR}]`)) return
+      const transition = target.getAnimations?.().find(animation =>
+        'transitionProperty' in animation && animation.transitionProperty === propertyName
+      )
+      if (!transition) return
+      moving.add(transition)
       bump()
+      const settled = () => {
+        if (moving.delete(transition)) bump()
+      }
+      void transition.finished.then(settled, settled)
     }
-    window.addEventListener('resize', onResize)
-    // Capture phase + document target catches scroll on any nested scrollable
-    // container (dashboards with internal overflow:auto panels). Bubble-phase
-    // listeners on window miss those because scroll events don't bubble.
+
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', bump, { passive: true })
+    viewport?.addEventListener('scroll', bump, { passive: true })
+    window.addEventListener('resize', bump)
+    window.addEventListener('orientationchange', bump)
     document.addEventListener('scroll', bump, { passive: true, capture: true })
+    document.addEventListener('load', bump, true)
+    document.addEventListener('transitionrun', onTransitionRun, true)
 
     const ro = new ResizeObserver(bump)
     ro.observe(document.body)
 
+    const observer = new MutationObserver((records) => {
+      if (!needsPositionSyncRef.current) return
+      if (records.some(({ target }) => {
+        const element = target instanceof Element ? target : target.parentElement
+        return !element?.closest(`[${WIDGET_ATTR}]`)
+      })) bump()
+    })
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true })
+
     return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', onResize)
+      if (raf !== undefined) cancelAnimationFrame(raf)
+      viewport?.removeEventListener('resize', bump)
+      viewport?.removeEventListener('scroll', bump)
+      window.removeEventListener('resize', bump)
+      window.removeEventListener('orientationchange', bump)
       document.removeEventListener('scroll', bump, { capture: true })
+      document.removeEventListener('load', bump, true)
+      document.removeEventListener('transitionrun', onTransitionRun, true)
+      moving.clear()
       ro.disconnect()
+      observer.disconnect()
     }
   }, [])
   // Pin state
@@ -579,9 +598,21 @@ function FeedbackWidgetInner({
     setTarget(null); setComment(''); clearImage(); setMode('idle'); setSelectedPin(null); setAgentOpen(false)
   }, [page?.url])
 
-  const pagePoint = (x: number, y: number, position: ClickTarget | Comment) => conversation && positionedPoint(position) || (page
-    ? { fixedX: x / 100 * page.width - page.scrollX, fixedY: y / 100 * page.height - page.scrollY }
-    : fromPagePercentFixed(x, y))
+  const pagePoint = (position: ClickTarget | Comment, element?: Element | null) => {
+    const { x, y, anchor } = position
+    if (page) return { fixedX: x / 100 * page.width - page.scrollX, fixedY: y / 100 * page.height - page.scrollY }
+    const elementPoint = positionedPoint(position, element === undefined ? findPinElement(position.selector) : element)
+    if (elementPoint) return elementPoint
+    if (position.targetType === 'text_range' && anchor && !conversation) {
+      const container = findPinElement(anchor.containerSelector)
+      const range = container && restoreTextRange(anchor, container)
+      if (range) {
+        const rect = range.getBoundingClientRect()
+        if (rect.width || rect.height) return { fixedX: rect.left + rect.width / 2, fixedY: rect.top + rect.height / 2 }
+      }
+    }
+    return fromPagePercentFixed(x, y)
+  }
 
   const feedbackContextGeneration = useRef(0)
   useEffect(() => {
@@ -623,13 +654,13 @@ function FeedbackWidgetInner({
     let refreshVersion = 0
     const request = personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) })
     request.then((nextComments) => {
-      if (!cancelled) setComments(nextComments)
+      if (!cancelled) setComments(nextComments.map(normalizeCommentAnchor))
     }).catch((error) => { if (!cancelled) setApiError(String(error.message)) })
     const refresh = async () => {
       const version = ++refreshVersion
       try {
         const fresh = await (personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) }))
-        if (!cancelled && version === refreshVersion) setComments(fresh)
+        if (!cancelled && version === refreshVersion) setComments(fresh.map(normalizeCommentAnchor))
       } catch { /* Preserve drafts and loaded comments while offline. */ }
     }
     const timer = window.setInterval(refresh, 240_000)
@@ -645,7 +676,7 @@ function FeedbackWidgetInner({
     let cancelled = false
     const timer = window.setInterval(() => {
       void personalComments.list(currentUrl).then((fresh) => {
-        if (!cancelled) setComments(fresh)
+        if (!cancelled) setComments(fresh.map(normalizeCommentAnchor))
       }).catch(() => { /* Keep the last synchronized project state while offline. */ })
     }, 15_000)
     return () => { cancelled = true; window.clearInterval(timer) }
@@ -669,11 +700,39 @@ function FeedbackWidgetInner({
   useEffect(() => {
     if (mode !== 'selecting' || page) return
 
-    function onClick(e: MouseEvent) {
-      const el = e.target as HTMLElement
-      if (el.closest?.(`[${WIDGET_ATTR}]`)) return
+    let press: { element: Element; target: ClickTarget } | undefined
+    const selectable = (node: EventTarget | null): node is Element =>
+      node instanceof Element && !node.closest(`[${WIDGET_ATTR}]`)
+      && (!conversation || Boolean(node.closest(conversation.containerSelector ?? 'body')))
 
-      if (conversation && !el.closest(conversation.containerSelector ?? 'body')) return
+    function pointTarget(el: Element, x: number, y: number): ClickTarget {
+      return {
+        targetType: 'element_point',
+        selector: conversation
+          ? conversationSelector(el, conversation.containerSelector ?? 'body')
+          : getSelector(el),
+        ...elementOffset(el.getBoundingClientRect(), x, y),
+        ...clientToPagePercent(x, y),
+        url: window.location.href,
+      }
+    }
+
+    function onPointerDown(e: PointerEvent) {
+      press = undefined
+      if (!e.isPrimary || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !selectable(e.target)) return
+      press = { element: e.target, target: pointTarget(e.target, e.clientX, e.clientY) }
+      // Some routers navigate during pointerdown. Preserve the browser's
+      // default action so the same gesture can still select text.
+      e.stopPropagation()
+    }
+
+    function onPointerCancel() { press = undefined }
+
+    function onClick(e: MouseEvent) {
+      const picked = e.detail > 0 ? press : undefined
+      press = undefined
+      if (!selectable(e.target)) return
+      const el = picked?.element ?? e.target
       e.preventDefault()
       e.stopPropagation()
       setShowSelectingHint(false)
@@ -684,23 +743,22 @@ function FeedbackWidgetInner({
 
       const sel = window.getSelection()
       if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-        const built = buildTextRangeAnchor(sel.getRangeAt(0), {
+        const range = sel.getRangeAt(0)
+        const origin = layoutViewportOrigin()
+        const built = buildTextRangeAnchor(range, {
           getSelector: conversation ? (element) => conversationSelector(element, conversation.containerSelector ?? 'body') : getSelector,
           url: window.location.href,
           viewport: {
             width: window.innerWidth,
             height: window.innerHeight,
-            scrollX: window.scrollX,
-            scrollY: window.scrollY,
+            scrollX: origin.x,
+            scrollY: origin.y,
           },
           isExcluded: (node) => node.closest(`[${WIDGET_ATTR}]`) !== null,
         })
         if (built) {
-          if (conversation?.onTextSelection?.(sel.getRangeAt(0)) === false) return
-          const pct = toPagePercent(
-            built.midpointClient.x + window.scrollX,
-            built.midpointClient.y + window.scrollY,
-          )
+          if (conversation?.onTextSelection?.(range) === false) return
+          const pct = clientToPagePercent(built.midpointClient.x, built.midpointClient.y)
           const selectedTarget: ClickTarget = {
             selector: built.anchor.containerSelector,
             x: pct.x,
@@ -710,6 +768,13 @@ function FeedbackWidgetInner({
             anchor: built.anchor,
           }
           setTarget(conversation ? positionAt(selectedTarget, built.midpointClient.x, built.midpointClient.y) : selectedTarget)
+          if (!conversation) {
+            const capturedRange = range.cloneRange()
+            void captureImage(() => built.container.isConnected ? {
+              rect: getRangeRect(capturedRange, built.container),
+              element: built.container,
+            } : null)
+          }
 
           if (!authorNameRef.current) {
             setShowNameModal(true)
@@ -721,23 +786,10 @@ function FeedbackWidgetInner({
         }
       }
 
-      const pct = toPagePercent(e.pageX, e.pageY)
       conversation?.onClearSelection()
-      const clickedTarget: ClickTarget = {
-        selector: conversation ? conversationSelector(el, conversation.containerSelector ?? 'body') : getSelector(el),
-        x: pct.x,
-        y: pct.y,
-        url: window.location.href,
-      }
-      setTarget(conversation ? positionAt(clickedTarget, e.clientX, e.clientY) : clickedTarget)
+      setTarget(picked?.target ?? pointTarget(el, e.clientX, e.clientY))
 
-      const rect = el.getBoundingClientRect()
-      if (!conversation) captureImage({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      })
+      if (!conversation) void captureImage(() => el.isConnected ? { rect: el.getBoundingClientRect(), element: el } : null)
 
       if (!authorNameRef.current) {
         setShowNameModal(true)
@@ -747,8 +799,12 @@ function FeedbackWidgetInner({
       setMode('commenting')
     }
 
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('pointercancel', onPointerCancel, true)
     window.addEventListener('click', onClick, true)
     return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('pointercancel', onPointerCancel, true)
       window.removeEventListener('click', onClick, true)
     }
   }, [mode, conversation?.readOnly, conversation?.disabled, conversation?.draftLocked, conversation?.containerSelector, conversation?.onTextSelection])
@@ -756,7 +812,7 @@ function FeedbackWidgetInner({
   // --- Auto-focus textarea ---
   useEffect(() => {
     if (mode === 'commenting' && textareaRef.current) {
-      textareaRef.current.focus()
+      textareaRef.current.focus({ preventScroll: true })
     }
   }, [mode])
 
@@ -800,9 +856,15 @@ function FeedbackWidgetInner({
         payload.authorName = authorNameRef.current
       }
 
-      if (targetData.anchor) {
+      if (targetData.targetType === 'text_range') {
         payload.targetType = 'text_range'
         payload.anchor = targetData.anchor
+      } else {
+        const anchor = readElementPoint({ elementX: targetData.elementX, elementY: targetData.elementY })
+        if (anchor) {
+          payload.targetType = 'element_point'
+          payload.anchor = anchor
+        }
       }
 
       const encoded = await encodeImage()
@@ -829,6 +891,8 @@ function FeedbackWidgetInner({
         authorName: data.authorName ?? authorNameRef.current ?? undefined,
         targetType: targetData.targetType,
         anchor: targetData.anchor ?? null,
+        elementX: targetData.elementX,
+        elementY: targetData.elementY,
       }
 
       setComments((prev) => [newComment, ...prev])
@@ -1092,7 +1156,7 @@ function FeedbackWidgetInner({
     const pad = 16
     const popW = conversation ? Math.min(340, window.innerWidth - 32) : 300
     const popH = 300
-    const { fixedX, fixedY } = pagePoint(target.x, target.y, target)
+    const { fixedX, fixedY } = pagePoint(target)
     let leftFixed = fixedX + pad
     let topFixed = fixedY + pad
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
@@ -1114,7 +1178,7 @@ function FeedbackWidgetInner({
   const pinPopoverStyle = (c: Comment): React.CSSProperties => {
     const pad = 16
     const popW = 280
-    const { fixedX, fixedY } = pagePoint(c.x, c.y, c)
+    const { fixedX, fixedY } = pagePoint(c)
     let leftFixed = fixedX + pad
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
     if (leftFixed < pad) leftFixed = pad
@@ -1167,39 +1231,6 @@ function FeedbackWidgetInner({
     : filterStatus === 'open'
       ? 'Open comments'
       : 'All comments'
-  // Pin only renders if its selector still resolves on the current DOM.
-  // Driven by a MutationObserver so we only recompute on real DOM changes,
-  // and only re-render when the live set actually differs.
-  const [liveCommentIds, setLiveCommentIds] = useState<Set<string>>(() => new Set())
-  const filteredCommentsRef = useRef(filteredComments)
-  filteredCommentsRef.current = filteredComments
-  useEffect(() => {
-    if (page) { setLiveCommentIds(new Set(page.liveIds)); return }
-    const recompute = () => {
-      const next = new Set<string>()
-      for (const c of filteredCommentsRef.current) {
-        try { if (document.querySelector(c.selector)) next.add(c.id) } catch { /* invalid selector */ }
-      }
-      setLiveCommentIds((prev) => {
-        if (prev.size !== next.size) return next
-        for (const id of next) if (!prev.has(id)) return next
-        return prev
-      })
-    }
-    recompute()
-    let pending = false
-    let timeout: number | undefined
-    const obs = new MutationObserver(() => {
-      if (pending) return
-      pending = true
-      timeout = window.setTimeout(() => { pending = false; recompute() }, 250)
-    })
-    obs.observe(document.body, { childList: true, subtree: true, attributes: true })
-    return () => {
-      obs.disconnect()
-      window.clearTimeout(timeout)
-    }
-  }, [filteredComments, page?.liveIds])
   const commentCount = filteredComments.length
 
   // Sync on scroll when anything position:fixed is visible — popovers, the
@@ -1231,6 +1262,9 @@ function FeedbackWidgetInner({
           tone="success"
           onCancel={openReviewFromHint}
         />
+      )}
+      {mode === 'selecting' && !showSelectingHint && !postSendHint && !sidebarOpen && !showNameModal && !agentOpen && (
+        <TouchSelectionExit onCancel={exitFeedbackMode} />
       )}
 
       {/* Popover */}
@@ -1379,7 +1413,7 @@ function FeedbackWidgetInner({
               />
             </div>
 
-            {target.anchor && !conversation?.concealed && (
+            {target.targetType === 'text_range' && target.anchor && !conversation?.concealed && (
               <TextRangeQuote
                 text={target.anchor.selectedText}
                 style={{ margin: '0 14px 8px' }}
@@ -1402,7 +1436,7 @@ function FeedbackWidgetInner({
                   <img
                     src={imagePreviewUrl}
                     alt="captured viewport"
-                    style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)' }}
+                    style={{ height: 36, width: 56, objectFit: 'contain', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)' }}
                   />
                 ) : (
                   <div
@@ -1564,7 +1598,7 @@ function FeedbackWidgetInner({
 
       {/* New comment pin at clicked position */}
       {mode === 'commenting' && target && (() => {
-        const { fixedX, fixedY } = pagePoint(target.x, target.y, target)
+        const { fixedX, fixedY } = pagePoint(target)
         return (
           <div
             {...{ [WIDGET_ATTR]: '' }}
@@ -1585,10 +1619,13 @@ function FeedbackWidgetInner({
 
       {/* Persisted comment pins */}
       {pinsVisible && filteredComments.map((c, i) => {
-        if (!liveCommentIds.has(c.id) || (conversation && !conversation.feedback.find(item => item.id === c.id)?.target)) return null
-        const point = pagePoint(c.x, c.y, c)
-        const pinPos = page || conversation ? { left: point.fixedX, top: point.fixedY } : getElementFixedPos(c.selector, c.x, c.y)
-        if (!pinPos) return null
+        if (page && !page.liveIds.includes(c.id)) return null
+        if (conversation && !conversation.feedback.find(item => item.id === c.id)?.target) return null
+        const element = page ? null : findPinElement(c.selector)
+        const point = pagePoint(c, element)
+        if (element && !pinTargetVisible(element, point)) return null
+        if (!element && !page && !conversation && !c.anchor && c.elementX === undefined) return null
+        const pinPos = { left: point.fixedX, top: point.fixedY }
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
         const isHovered = hoveredPin === c.id && !isSelected
@@ -1681,7 +1718,7 @@ function FeedbackWidgetInner({
                       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fw-foreground)' }}>{pinAuthor}</span>
                       <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{timeAgo(c.createdAt)}</span>
                     </div>
-                    {c.anchor && (
+                    {c.targetType === 'text_range' && c.anchor && (
                       <TextRangeQuote
                         text={c.anchor.selectedText}
                         style={{ fontSize: 12, marginBottom: 4, WebkitLineClamp: 2 }}
@@ -1788,7 +1825,7 @@ function FeedbackWidgetInner({
                       </div>
                     ) : (
                       <>
-                        {c.anchor && (
+                        {c.targetType === 'text_range' && c.anchor && (
                           <TextRangeQuote
                             text={c.anchor.selectedText}
                             style={{ marginBottom: 10 }}
@@ -1804,7 +1841,7 @@ function FeedbackWidgetInner({
                       <img
                         src={c.imageUrl}
                         alt=""
-                        onClick={() => window.open(c.imageUrl!, '_blank')}
+                        onClick={(e) => openScreenshot(e.currentTarget.src)}
                         style={{ width: '100%', borderRadius: 8, border: '1px solid var(--fw-contrast-08)', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
                       />
                     )}
@@ -2177,7 +2214,7 @@ function FeedbackWidgetInner({
                     </div>
                   ) : (
                     <>
-                      {c.anchor && (
+                      {c.targetType === 'text_range' && c.anchor && (
                         <TextRangeQuote
                           text={c.anchor.selectedText}
                           style={{ marginLeft: 32, marginBottom: 6 }}
@@ -2198,7 +2235,7 @@ function FeedbackWidgetInner({
                         <img
                           src={c.imageUrl}
                           alt=""
-                          onClick={(e) => { e.stopPropagation(); window.open(c.imageUrl!, '_blank') }}
+                          onClick={(e) => { e.stopPropagation(); openScreenshot(e.currentTarget.src) }}
                           style={{
                             marginTop: 8,
                             marginLeft: 32,
@@ -2299,6 +2336,7 @@ function FeedbackWidgetInner({
           userSelect: 'none',
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           opacity: sidebarOpen ? 0 : 1,
+          visibility: mode === 'commenting' && window.innerWidth < 480 ? 'hidden' : undefined,
           transform: sidebarOpen ? 'translateY(calc(-50% + 8px))' : 'translateY(-50%)',
           pointerEvents: sidebarOpen ? 'none' : 'auto',
           transition: 'opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -2497,7 +2535,7 @@ function FeedbackWidgetInner({
             // project feed while reconciling private lifecycle changes.
             const context = feedbackContextGeneration.current
             void widgetLogin.comments!.list(currentUrl).then((fresh) => {
-              if (context === feedbackContextGeneration.current) setComments(fresh)
+              if (context === feedbackContextGeneration.current) setComments(fresh.map(normalizeCommentAnchor))
             }).catch(() => {})
           }}
         />

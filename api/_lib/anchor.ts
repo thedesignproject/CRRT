@@ -1,3 +1,5 @@
+import { readElementPoint } from '../../src/lib/elementPoint.js'
+
 export type CommentTargetType = 'element_point' | 'text_range'
 
 export type ParsedTarget =
@@ -108,13 +110,23 @@ export function parseCommentTarget(targetType: unknown, anchor: unknown): Parsed
   }
 
   if (targetType !== 'text_range') {
-    if (anchor !== undefined && anchor !== null) {
-      return { ok: false, error: 'anchor is only valid when targetType is "text_range"' }
-    }
-    return { ok: true, targetType: 'element_point', anchor: null }
+    if (anchor === undefined || anchor === null) return { ok: true, targetType: 'element_point', anchor: null }
+    if (targetType !== 'element_point') return { ok: false, error: 'anchor requires an explicit targetType' }
+    const point = readElementPoint(anchor)
+    if (!point) return { ok: false, error: 'anchor must contain only elementX and elementY as numbers from 0 to 1' }
+    return { ok: true, targetType: 'element_point', anchor: { ...point } }
   }
 
   const sanitized = sanitizeTextRangeAnchor(anchor)
   if (typeof sanitized === 'string') return { ok: false, error: sanitized }
   return { ok: true, targetType: 'text_range', anchor: sanitized }
+}
+
+
+/** Older widget bundles show an empty quote for any non-null point anchor. */
+export function widgetCommentList<T extends { targetType?: string; anchor?: unknown }>(comments: T[], elementPointAnchors: unknown) {
+  if (elementPointAnchors === '1') return comments
+  return comments.map(comment => comment.targetType === 'element_point' && comment.anchor
+    ? { ...comment, anchor: null }
+    : comment)
 }

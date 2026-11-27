@@ -1,38 +1,41 @@
 // Characters that would need escaping in a CSS identifier (used for both
 // id selectors and class selectors — same character rules for unescaped form).
 const INVALID_IDENT_CHARS = /[^a-zA-Z0-9_-]/
+const INVALID_IDENT_START = /^(?:-?[0-9]|-$)/
 
-function isValidClass(name: string): boolean {
-  return name.length > 0 && !INVALID_IDENT_CHARS.test(name)
+function isValidIdentifier(name: string): boolean {
+  return name.length > 0 && !INVALID_IDENT_CHARS.test(name) && !INVALID_IDENT_START.test(name)
 }
 
 export function getSelector(el: Element): string {
-  if (el.id && !INVALID_IDENT_CHARS.test(el.id)) return `#${el.id}`
+  if (el === document.body) return 'body'
 
   const parts: string[] = []
   let current: Element | null = el
 
   while (current && current !== document.body) {
-    let selector = current.tagName.toLowerCase()
-
-    if (current.className && typeof current.className === 'string') {
-      const safeClasses = current.className
-        .trim()
-        .split(/\s+/)
-        .filter(isValidClass)
-        .slice(0, 2)
-
-      if (safeClasses.length) {
-        selector += '.' + safeClasses.join('.')
-      }
+    if (isValidIdentifier(current.id)) {
+      parts.unshift(`#${current.id}`)
+      break
     }
+    const tag = current.tagName.toLowerCase()
+    const safeClasses = typeof current.className === 'string'
+      ? current.className.split(/\s+/).filter(isValidIdentifier)
+      : []
+    let selector = tag + safeClasses.slice(0, 2).map(name => '.' + name).join('')
 
     const parent: Element | null = current.parentElement
     if (parent) {
       const siblings = Array.from(parent.children).filter(
         (c: Element) => c.tagName === current!.tagName
       )
-      if (siblings.length > 1) {
+      // A shared class identifies repeated cards. Keep their position in
+      // the group independent of classes that move with the active state.
+      const sharedClass = safeClasses.find(name =>
+        siblings.some(sibling => sibling !== current && sibling.classList.contains(name))
+      )
+      if (sharedClass) selector = tag + '.' + sharedClass
+      if (siblings.filter((sibling) => sibling.matches(selector)).length > 1) {
         const index = siblings.indexOf(current) + 1
         selector += `:nth-of-type(${index})`
       }

@@ -70,6 +70,18 @@ it('selects and highlights host elements without capturing typing or clicking th
   await receive({ kind: 'highlight', selector: '#missing' })
   await receive({ kind: 'highlight', selector: '[' })
 })
+
+it('keeps a tracked pin hidden when its selector exists but the target is hidden', async () => {
+  await receive({ kind: 'ready' })
+  await receive({ kind: 'track', targets: [{ id: 'relative-page', selector: '#target', x: 25, y: 25 }] })
+  expect(channel.send).toHaveBeenLastCalledWith(2, expect.objectContaining({ liveIds: ['relative-page'] }))
+  element.style.visibility = 'hidden'
+  await vi.advanceTimersByTimeAsync(600)
+  expect(channel.send).toHaveBeenLastCalledWith(2, expect.objectContaining({ liveIds: [] }))
+  element.style.visibility = 'visible'
+  await vi.advanceTimersByTimeAsync(600)
+  expect(channel.send).toHaveBeenLastCalledWith(2, expect.objectContaining({ liveIds: ['relative-page'] }))
+})
 it('never clips a newly opening surface to stale bounds, while keeping its transparent margins click-through', async () => {
   await receive({ kind: 'ready' })
   await receive({ kind: 'layout', rects: [[100, 100, 44, 44]] })

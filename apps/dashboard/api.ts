@@ -31,6 +31,8 @@ export interface TextRangeAnchorRecord {
   createdAtViewport?: { width: number; height: number; scrollX: number; scrollY: number }
 }
 
+export type CommentAnchorRecord = TextRangeAnchorRecord | { elementX: number; elementY: number }
+
 export interface CommentRecord {
   id: string
   projectId: string
@@ -46,7 +48,7 @@ export interface CommentRecord {
   imageUrl: string | null
   authorName: string | null
   targetType?: CommentTargetType
-  anchor?: TextRangeAnchorRecord | null
+  anchor?: CommentAnchorRecord | null
   githubIssue?: GitHubIssueRecord | null
   externalWork?: ExternalWorkRecord[]
   createdAt: string
@@ -209,7 +211,7 @@ export interface ExtensionCommentRecord {
   createdAt: string
   updatedAt: string
   targetType?: CommentTargetType
-  anchor?: TextRangeAnchorRecord | null
+  anchor?: CommentAnchorRecord | null
 }
 
 export interface ExtensionCommentsPage {

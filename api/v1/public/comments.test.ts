@@ -76,6 +76,16 @@ function mockRes(): MockRes {
 const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
+it.each([undefined, '1'])('returns point anchors only to capable public widget lists (%s)', async elementPointAnchors => {
+  const point = { id: 'point', selector: '#buy', targetType: 'element_point', anchor: { elementX: .2, elementY: .8 } }
+  const legacy = { ...point, id: 'legacy', anchor: null }
+  const text = { id: 'quote', targetType: 'text_range', anchor: { selectedText: 'Buy now' } }
+  vi.mocked(listPublicComments).mockResolvedValue([point, legacy, text] as never)
+  const res = mockRes()
+  await call(mockReq({ method: 'GET', query: { projectKey: 'demo-project', elementPointAnchors } }), res)
+  expect(res.body).toEqual([elementPointAnchors ? point : { ...point, anchor: null }, legacy, text])
+})
+
 beforeEach(() => {
   vi.mocked(getProject).mockResolvedValue(null)
   vi.mocked(ensurePublicProject).mockReset()
@@ -1196,9 +1206,26 @@ describe('api/v1/public/comments', () => {
       expect(createPublicComment).not.toHaveBeenCalled()
     })
 
-    it('rejects an anchor on element_point payloads', async () => {
+    it('rejects an anchor without an explicit target type', async () => {
       const res = mockRes()
       await call(mockReq({ body: postBody({ anchor: validAnchor }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('persists element offsets separately from the selector', async () => {
+      const anchor = { elementX: .2, elementY: .8 }
+      vi.mocked(ensurePublicProject).mockResolvedValue({ publicKey: 'demo-project', name: 'Demo', allowedOrigins: [] } as never)
+      vi.mocked(createPublicComment).mockResolvedValue({ id: 'point', targetType: 'element_point', anchor } as never)
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ selector: '#buy', targetType: 'element_point', anchor }) }), res)
+      expect(res.statusCode).toBe(201)
+      expect(createPublicComment).toHaveBeenCalledWith(expect.objectContaining({ selector: '#buy', targetType: 'element_point', anchor }))
+    })
+
+    it('rejects extra element anchor keys at the write endpoint', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ targetType: 'element_point', anchor: { elementX: .5, elementY: .5, selectedText: 'extra' } }) }), res)
       expect(res.statusCode).toBe(400)
       expect(createPublicComment).not.toHaveBeenCalled()
     })

@@ -4,6 +4,7 @@ import {
   boundaryToTextOffset,
   buildTextRangeAnchor,
   resolveContainer,
+  restoreTextRange,
   type RangeLike,
   type RangeRect,
 } from '../lib/textAnchor'
@@ -38,6 +39,13 @@ afterEach(() => {
 })
 
 describe('buildTextRangeAnchor', () => {
+  it('falls back when saved offsets cannot be mapped to live text nodes', () => {
+    const { p, lead } = setupDom()
+    const built = buildTextRangeAnchor(makeRange(lead, 0, lead, 5), baseOpts)!
+    vi.spyOn(document, 'createTreeWalker').mockReturnValue(document.createTreeWalker(document.createElement('div')))
+    expect(restoreTextRange(built.anchor, p)).toBeNull()
+  })
+
   it('anchors a selection within a single text node', () => {
     const { p, lead } = setupDom()
     const built = buildTextRangeAnchor(makeRange(lead, 0, lead, 5), baseOpts)
@@ -73,6 +81,12 @@ describe('buildTextRangeAnchor', () => {
     expect(built!.anchor.prefix).toBe('Hel')
     expect(built!.anchor.suffix).toBe('ve world of text anchors')
     expect(built!.anchor.createdAtViewport).toEqual({ width: 1280, height: 720, scrollX: 0, scrollY: 40 })
+    const restored = restoreTextRange(built!.anchor, p)
+    expect(restored?.startContainer).toBe(lead)
+    expect(restored?.endContainer).toBe(b.firstChild)
+    expect(restored?.toString()).toBe('lo bra')
+    b.textContent = 'fresh'
+    expect(restoreTextRange(built!.anchor, p)).toBeNull()
   })
 
   it('handles element-node boundary points (child-index offsets)', () => {

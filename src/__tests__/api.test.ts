@@ -5,6 +5,7 @@ import {
   fetchProjectComments,
   fetchWidgetAgentEligibility,
   mutateWidgetFeedback,
+  normalizeCommentAnchor,
   patchReviewStatus,
   postComment,
   deleteComment,
@@ -13,6 +14,17 @@ import {
 
 const API = 'https://api.example.com'
 const widgetSession = { accessToken: `crrt_widget_${'a'.repeat(43)}`, displayName: 'Ada', expiresAt: '2099-01-01T00:00:00Z' }
+
+it('normalizes only anchors that match the comment target type', () => {
+  const base = { id: 'point', projectId: 'project', pageUrl: API, selector: '#buy', x: 1, y: 2, body: 'Note', reviewStatus: 'open' as const, createdAt: '2026-11-27' }
+  const anchor = { elementX: .2, elementY: .8 }
+  expect(normalizeCommentAnchor({ ...base, targetType: 'element_point', anchor }))
+    .toEqual({ ...base, targetType: 'element_point', ...anchor, anchor: null })
+  expect(normalizeCommentAnchor({ ...base, targetType: 'text_range', anchor }))
+    .toEqual({ ...base, targetType: 'text_range', anchor: null })
+  expect(normalizeCommentAnchor({ ...base, targetType: 'text_range', anchor: null }))
+    .toEqual({ ...base, targetType: 'text_range', anchor: null })
+})
 
 function mockFetch(impl: (url: string, init?: RequestInit) => Promise<Response> | Response) {
   const spy = vi.fn(impl)
@@ -39,7 +51,7 @@ describe('fetchProjectComments', () => {
   it('GETs the comments endpoint with URL-encoded projectId', async () => {
     const spy = mockFetch(() => jsonResponse([]))
     await fetchProjectComments(API, 'acme/internal')
-    expect(spy).toHaveBeenCalledWith(`${API}/v1/public/comments?projectKey=acme%2Finternal`)
+    expect(spy).toHaveBeenCalledWith(`${API}/v1/public/comments?projectKey=acme%2Finternal&elementPointAnchors=1`)
   })
 
   it('normalizes reviewStatus on each comment', async () => {

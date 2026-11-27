@@ -1,5 +1,6 @@
 import type { TextRangeAnchor } from '../../lib/textAnchor'
 import type { ScreenshotFocusRect } from '../../lib/screenshotCapture'
+import type { ElementPointAnchor } from '../../lib/elementPoint'
 
 export interface FeedbackWidgetProps {
   projectId: string
@@ -114,8 +115,8 @@ export interface PersonalComments {
   }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>
-  list(pageUrl: string): Promise<Comment[]>
-  create(payload: Record<string, unknown>): Promise<Comment>
+  list(pageUrl: string): Promise<WireComment[]>
+  create(payload: Record<string, unknown>): Promise<WireComment>
   update(id: string, body: string): Promise<unknown>
   remove(id: string): Promise<void>
 }
@@ -154,4 +155,8 @@ export interface Comment {
   anchor?: TextRangeAnchor | null
   elementX?: number
   elementY?: number
+}
+
+export type WireComment = Omit<Comment, 'anchor'> & {
+  anchor?: TextRangeAnchor | ElementPointAnchor | null
 }

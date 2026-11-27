@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Check, RotateCcw, Trash2 } from 'lucide-react'
-import type { Comment } from '../../../src/components/FeedbackWidget/types'
+import type { WireComment } from '../../../src/components/FeedbackWidget/types'
 
-export function LocalFeedbackList({ comments, busy, onResolve, onDelete }: { comments: Comment[]; busy: boolean; onResolve: (comment: Comment) => void; onDelete: (id: string) => void }) {
+export function LocalFeedbackList({ comments, busy, onResolve, onDelete }: { comments: WireComment[]; busy: boolean; onResolve: (comment: WireComment) => void; onDelete: (id: string) => void }) {
   const [visibleCount, setVisibleCount] = useState(3)
   return <>
     <div className="local-comments">
