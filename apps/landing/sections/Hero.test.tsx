@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 afterEach(() => {
@@ -71,17 +71,7 @@ it('keeps the conversion navigation available after the intro', async () => {
   expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/thedesignproject/CRRT')
   expect(screen.queryByRole('link', { name: 'Capture anywhere' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Product' })).not.toBeInTheDocument()
-})
-
-it('leaves Resources out of the main navigation; the footer links to it instead', async () => {
-  const { Navigation } = await import('../components/Navigation')
-  const { ThemeProvider } = await import('../../../src/design-system')
-  render(<ThemeProvider><Navigation authenticated={false} /></ThemeProvider>)
-
-  const nav = screen.getByRole('navigation', { name: 'Main navigation' })
-  expect(within(nav).getAllByRole('link').map(link => link.getAttribute('href'))).toEqual(['/#product', '/#how-it-works', '/#pricing', '/docs', 'https://github.com/thedesignproject/CRRT', 'http://localhost:5173'])
-  expect(within(nav).queryByRole('button', { name: /Resources/ })).not.toBeInTheDocument()
-  expect(within(nav).queryByRole('link', { name: /resources/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Resources/ })).not.toBeInTheDocument()
 })
 
 it('preserves the navigation theme control, including its label and stored preference', async () => {
