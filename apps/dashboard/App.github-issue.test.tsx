@@ -112,7 +112,7 @@ vi.mock('./components/CommentDetail', () => ({
     {props.onConnectStorybook && <button onClick={props.onConnectStorybook}>connect storybook</button>}
   </div>,
 }))
-vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: { agentAction?: ReactNode; onNewProject: () => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void; children?: ReactNode; footer?: ReactNode }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={props.onNewProject}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button>{props.children}{props.footer}</> }))
+vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: { agentAction?: ReactNode; onNewProject: () => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void; children?: ReactNode; footer?: ReactNode; agentNav?: { readyCount: number; live: boolean; active: string | null; onOpenNextSteps: () => void; onOpenAgentRuns: () => void } }) => <>{props.agentAction}{props.agentNav && <><button aria-pressed={props.agentNav.active === 'next-steps'} onClick={props.agentNav.onOpenNextSteps}>nav next steps {props.agentNav.readyCount}</button><button aria-pressed={props.agentNav.active === 'agent-runs'} onClick={props.agentNav.onOpenAgentRuns}>{props.agentNav.live ? 'nav agent runs live' : 'nav agent runs'}</button></>}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={props.onNewProject}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button>{props.children}{props.footer}</> }))
 vi.mock('./components/CommentList', () => ({
   CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null; updatedAt: string }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
@@ -126,7 +126,8 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
 }))
-vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onCopySessionLink: () => void; onClose: () => void; projectComments: Array<{id:string;implementationStatus:string}>; agentConnected:boolean }) => <aside data-testid="agent-sidebar"><button onClick={props.onCopySessionLink}>copy session prompt</button><span data-testid="agent-queue">{props.agentConnected ? props.projectComments.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span><button onClick={props.onClose}>close agent sidebar</button></aside> }))
+vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { handoff: { onCopySessionLink: () => void }; onOpenComment: (id: string) => void; onOpenRuns: () => void }) => <section data-testid="next-steps"><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
+vi.mock('./components/AgentRunsPage', () => ({ AgentRunsPage: (props: { queue: Array<{id:string;implementationStatus:string}>; connected: boolean; notice?: string; onOpenNextSteps: () => void }) => <section data-testid="agent-runs"><span data-testid="agent-queue">{props.connected ? props.queue.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span>{props.notice && <p role="status">{props.notice}</p>}<button onClick={props.onOpenNextSteps}>go to next steps</button></section> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
@@ -135,12 +136,13 @@ vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project, co
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number, undo?: Array<{id:string;updatedAt:string}>) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 0, [{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])}>continue undoable move</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
 vi.mock('./components/RecordingsPage', () => ({ RecordingsPage: () => <div>recordings page</div> }))
-vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; canOperateAgent: boolean }) => <div>
+vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; onSelect: (id: string) => void; canOperateAgent: boolean }) => <div>
   command palette
   <button onClick={() => props.onAction('accept')}>command accept</button>
   <button onClick={() => props.onAction('reject')}>command reject</button>
   <button onClick={() => props.onAction('done')}>command done</button>
   <button onClick={() => props.onAction('filter-ready-for-testing')}>command testing filter</button>
+  <button onClick={() => props.onSelect('comment-1')}>command select comment</button>
   {props.canOperateAgent && <button onClick={() => props.onAction('toggle-sidebar')}>command agent panel</button>}
 </div> }))
 
@@ -238,13 +240,15 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByTestId('detail')).toHaveAttribute('data-comment-id', 'comment-1')
   })
 
-  it('toggles project settings from the header and returns to feedback', async () => {
+  it('opens project settings from the nav and returns to feedback from the project', async () => {
     render(<App />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'project' })).toHaveAttribute('aria-pressed', 'true'))
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
     expect(screen.queryByTestId('status-filter')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
+    expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'project' }))
     expect(screen.queryByText('Settings for project-1')).not.toBeInTheDocument()
     expect(screen.getByTestId('status-filter')).toHaveTextContent('open')
   })
@@ -257,7 +261,6 @@ describe('<App /> GitHub issue wiring', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'project' })).toHaveAttribute('aria-pressed', 'true'))
     fireEvent.click(screen.getByRole('button', { name: 'connect storybook' }))
     expect(screen.getByText('Settings for project-1 at Storybook')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
   })
@@ -690,20 +693,39 @@ describe('<App /> GitHub issue wiring', () => {
     expect(fixtures.agentEnabled).toHaveBeenLastCalledWith(false)
 
     fireEvent.click(launcher)
-    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith('project-1'))
-    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
-    expect(launcher).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.click(screen.getByRole('button', { name: 'close agent sidebar' }))
-    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+    await waitFor(() => expect(fixtures.agentEnabled).toHaveBeenLastCalledWith(true))
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    expect(launcher).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'nav next steps 0' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'see run' }))
+    expect(screen.getByTestId('agent-runs')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'nav agent runs' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'go to next steps' }))
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'open next step' }))
+    expect(screen.queryByTestId('next-steps')).toBeNull()
+    expect(screen.getByTestId('status-filter')).toHaveTextContent('all')
 
     fireEvent.keyDown(window, { key: 's' })
-    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 's' })
-    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+    expect(screen.queryByTestId('next-steps')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'search' }))
     fireEvent.click(screen.getByRole('button', { name: 'command agent panel' }))
-    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command agent panel' }))
+    expect(screen.queryByTestId('next-steps')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command agent panel' }))
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'nav agent runs' }))
+    expect(screen.getByTestId('agent-runs')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'nav next steps 0' }))
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'nav agent runs' }))
+    expect(screen.getByTestId('agent-runs')).toBeInTheDocument()
   })
 
   it('keeps Agents visible but closes and disables every opening path outside authorized feedback', async () => {
@@ -715,21 +737,70 @@ describe('<App /> GitHub issue wiring', () => {
     const launcher = await screen.findByRole('button', { name: 'Agents unavailable: Agents are unavailable for your project role.' })
     expect(launcher).toBeDisabled()
     await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith(null))
+    expect(screen.queryByRole('button', { name: /^nav / })).toBeNull()
     fireEvent.keyDown(window, { key: 's' })
-    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+    expect(screen.queryByTestId('next-steps')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'search' }))
     expect(screen.queryByRole('button', { name: 'command agent panel' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'project footer' })).toBeNull()
     expect(screen.getByText('project footer')).toBeInTheDocument()
   })
 
-  it('closes the Agent sidebar when leaving project feedback', async () => {
+  it('keeps comment shortcuts on the feedback list and S off Settings', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
+      body: 'Managed feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
+    // The selected comment is hidden on the agent pages, so its shortcuts and palette actions must not touch it there.
+    fireEvent.click(screen.getByRole('button', { name: 'nav next steps 0' }))
+    for (const key of ['a', 'd', 'm']) fireEvent.keyDown(window, { key })
+    // J, K and Space call preventDefault only when they move the selection.
+    for (const key of ['j', 'k', ' ']) expect(fireEvent.keyDown(window, { key })).toBe(true)
+    for (const name of ['command accept', 'command reject', 'command done']) {
+      fireEvent.click(screen.getByRole('button', { name: 'search' }))
+      fireEvent.click(screen.getByRole('button', { name }))
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'nav agent runs' }))
+    for (const key of ['a', 'd', 'm']) fireEvent.keyDown(window, { key })
+    expect(fixtures.updateReview).not.toHaveBeenCalled()
+    expect(fixtures.updateImpl).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command select comment' }))
+    expect(screen.queryByTestId('agent-runs')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'nav next steps 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command testing filter' }))
+    expect(screen.queryByTestId('next-steps')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'show all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+    fireEvent.click(screen.getByRole('button', { name: 'nav agent runs' }))
+
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 's' })
+    expect(fireEvent.keyDown(window, { key: ' ' })).toBe(false)
+    fireEvent.keyDown(window, { key: 'a' })
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledOnce())
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command reject' }))
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
+
+    fireEvent.click(screen.getByRole('button', { name: 'settings' }))
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
+  })
+
+  it('leaves Next steps and disables Agents when the Inbox clears the project', async () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Agents, 0 ready' }))
-    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    expect(screen.getByTestId('next-steps')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
-    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Agents unavailable: Open project feedback to use Agents.' })).toBeDisabled()
+    expect(screen.queryByTestId('next-steps')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Agents unavailable: Select a project to use Agents.' })).toBeDisabled()
     await waitFor(() => expect(fixtures.agentProject).toHaveBeenLastCalledWith(null))
   })
 
@@ -890,6 +961,7 @@ it('excludes internal feedback from Agent discovery and explains an internal bul
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'Agents, 1 ready' }))
  expect(fixtures.agentComments).toHaveBeenLastCalledWith(['comment-1'])
+ fireEvent.keyDown(window, { key: 's' })
  fireEvent.click(screen.getByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
@@ -1076,7 +1148,7 @@ it('refuses oversized Select all without silently selecting a subset', async () 
  expect(fixtures.createShare).not.toHaveBeenCalled()
 })
 
-it('adopts a completed bulk handoff into the Agent sidebar',async()=>{
+it('opens Agent runs after a completed bulk handoff',async()=>{
  fixtures.comments=[readyFeedback('comment-1')]
  render(<App />)
  fireEvent.click(await screen.findByRole('button',{name:'show all'}))
@@ -1085,7 +1157,7 @@ it('adopts a completed bulk handoff into the Agent sidebar',async()=>{
  fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
  await screen.findByText('1 selected item copied for Claude Code.')
  expect(fixtures.adoptSession).toHaveBeenCalledWith(expect.objectContaining({shareId:'share-1'}),['comment-1'])
- expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+ expect(screen.getByTestId('agent-runs')).toBeInTheDocument()
 })
 
 
@@ -1136,7 +1208,7 @@ it('renders only active handoff feedback and its live progress, excluding unsele
    {...readyFeedback('internal'),visibility:'internal'},
  ]}
  const view = render(<App />)
- fireEvent.click(await screen.findByRole('button',{name:'Agents, 3 ready'}))
+ fireEvent.click(await screen.findByRole('button',{name:'nav agent runs live'}))
  expect(screen.getByTestId('agent-queue')).toHaveTextContent('selected-1:in_progress,selected-2:ready_for_testing')
  expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('unselected')
  expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('internal')
@@ -1150,7 +1222,7 @@ it.each(['loading','missing session','stale share','wrong project','empty state'
  fixtures.agentSession=context==='missing session'?null:{shareId:'active-share'}
  fixtures.agentShareState=context==='loading'?null:{share:{id:context==='stale share'?'old-share':'active-share'},project:{publicKey:context==='wrong project'?'other-project':'project-1'},presence:[{agentId:'local'}],comments:context==='empty state'?[]:[readyFeedback('comment-1')]}
  render(<App />)
- fireEvent.click(await screen.findByRole('button',{name:'Agents, 1 ready'}))
+ fireEvent.click(await screen.findByRole('button',{name:/^nav agent runs/}))
  expect(screen.getByTestId('agent-queue')).toHaveTextContent(context==='empty state'?'':'disconnected')
  expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('comment-1')
 })

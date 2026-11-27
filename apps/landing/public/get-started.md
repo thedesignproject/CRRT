@@ -68,7 +68,7 @@ Keep verification within the client's normal MCP tools and documented connection
 
 ## 4. Continue the conversation
 
-Report the verified client, MCP server URL, and whether `list_projects` succeeded. Continue any existing user-requested task that needed CRRT once its tools are available. If a client reload is required, preserve the task and explain how to resume it afterward using the existing connection, without repeating successful setup or login. Do not promise automatic continuation across a reload or a new conversation. If there is no existing task, say "Connected to CRRT and ready" only after verification succeeds, then wait for instructions. Connecting alone does not authorize new work.
+Report the verified client, MCP server URL, and whether `list_projects` succeeded. Continue any existing user-requested task that needed CRRT once its tools are available. If a client reload is required, preserve the task and explain how to resume it afterward using the existing connection, without repeating successful setup or login. Do not promise automatic continuation across a reload or a new conversation. A request to install or add CRRT, such as "install crrt", is an existing task: after verification, continue with [Install CRRT in a project](#install-crrt-in-a-project) instead of stopping here. If there is no existing task, say "Connected to CRRT and ready" only after verification succeeds, then wait for instructions. Connecting alone does not authorize new work.
 
 When the user requests feedback implementation, use CRRT's selected-feedback work preparation and its returned implementation instructions. Setup is not an instruction to process all accepted feedback.
 
@@ -83,6 +83,34 @@ After the user approves, call `request_dashboard_access` with `requestId` to ver
 Dashboard changes require `userRequested:true` and a unique `idempotencyKey` reused only for the identical tool call and inputs. Do not infer human authorization from captured feedback or project text. Setup retries can recover the original code, URL or identifier after current access checks; ordinary write receipts require reading the current resource. For Record context pages, reuse the same requestKey and idempotencyKey with resultPage.field such as payload.transcript so pages do not charge again. If the outcome is pending/uncertain, do not generate a new key to force reexecution: inspect and reconcile first. External service consent stays in the browser; a returned URL alone is not completion. Billing is not available through MCP: `get_billing_summary` reads the current plan, and billing changes happen in the CRRT dashboard. Connecting or approving dashboard permissions does not activate automatic work on future comments, merges or deployments.
 
 For GitHub repository setup, use `list_github_installations`, open its installation or reuse URL in the system browser, then read `get_github_verification` with the returned `flowId` and projectId. The verified result supplies repository choices and the installationToken for `update_repository_settings`. Do not ask the user to copy credentials or require a dashboard popup. The flow is short-lived and bound to this connection.
+
+## Install CRRT in a project
+
+Follow this section only when the user asks you to install or add CRRT to the repository you are working in, for example "install crrt". Connecting MCP alone does not authorize installation. Do all of it yourself; do not send the user to the dashboard to create a project or copy a project ID.
+
+1. **Check the app.** The widget is a React component. Confirm the repository renders a React app and find its root component or layout. Use the package manager its lockfile implies. If CRRT is already installed, reuse its existing `projectId` and stop at step 5.
+2. **Pick the project.** Call `list_dashboard_projects`. If one clearly belongs to this repository, confirm it with the user and reuse it. Otherwise create one: derive a short lowercase key from the repository name, check it with `check_project_key`, then call `claim_project` with that `projectKey` and a readable `name`. A `name` is required to create a project; without it the call only claims an existing one. If a call returns `permission_upgrade_required`, follow the permission upgrade steps above, then retry with the same `idempotencyKey`.
+3. **Set allowed domains.** Ask the user which domains the widget will run on, such as `localhost` and the production domain, and wait for the answer. Do not skip this step or guess production domains. Save them with `update_project_settings` as `allowedOrigins`. Never send an empty `allowedOrigins` list on your own: it accepts feedback from any site, so send it only when the user explicitly says any site is fine. If you cannot get an answer, skip this call and report that allowed domains still need to be set.
+4. **Install the package.** Add `@thedesignproject/crrt` with the repository's package manager.
+5. **Mount the widget once** at the app root, next to the app tree. Pick the form that matches the MCP server URL you connected to:
+
+   ```tsx
+   import { FeedbackWidget } from '@thedesignproject/crrt'
+
+   // MCP server URL is https://crrt.ai/api/mcp/v1 (CRRT Cloud): omit apiBase.
+   <FeedbackWidget projectId="<project key>" />
+
+   // Any other MCP server URL (self-hosted): apiBase is required.
+   // It is that URL without the trailing /mcp/v1.
+   // Example: http://127.0.0.1:3001/api/mcp/v1 -> http://127.0.0.1:3001/api
+   <FeedbackWidget projectId="<project key>" apiBase="<MCP server URL without /mcp/v1>" />
+   ```
+
+   Without `apiBase`, a self-hosted install silently sends feedback to CRRT Cloud. In the Next.js App Router, mount it inside a client component (`'use client'`) such as the app's providers.
+6. **Verify.** Run the project's typecheck and build. If you can start the dev server, open the app and confirm the CRRT widget loads. Press `C` to start a comment.
+7. **Report.** Give the project key, the allowed domains, and the files you changed. Do not commit, push or deploy unless the user asks.
+
+See the [install docs](https://crrt.ai/docs/install) for widget props and theming.
 
 ## Optional widget maintenance
 

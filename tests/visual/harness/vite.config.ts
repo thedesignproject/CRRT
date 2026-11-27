@@ -32,7 +32,7 @@ export default defineConfig({
     'wxt/browser': resolve(root, 'browser.ts'),
     'html2canvas-pro': resolve(root, 'capture.ts'),
     'storybook/manager-api': resolve(root, 'storybook.ts'),
-  }, dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge'] },
+  }, dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge', '@base-ui/react'] },
   define: {
     'process.env.STORYBOOK_CRRT_CONNECTION_ID': 'undefined',
     'process.env.STORYBOOK_CRRT_PROJECT_KEY': 'undefined',

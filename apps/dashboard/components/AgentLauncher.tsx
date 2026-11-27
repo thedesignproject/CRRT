@@ -24,8 +24,7 @@ export function AgentLauncher({
     <button
       type="button"
       onClick={disabled ? undefined : onOpen}
-      aria-controls="agent-sidebar"
-      aria-expanded={disabled ? false : open}
+      aria-current={open ? 'page' : undefined}
       aria-label={label}
       disabled={disabled}
       title={disabled ? unavailableReason : undefined}

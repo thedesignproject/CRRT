@@ -9,7 +9,7 @@ export const publicScreens = [
     .map(r => ({ id: `resource-${r.slug}`, path: `/resources/${r.slug}` })),
 ]
 export const auditStates = ['running', 'completed-findings', 'failed']
-export const dashboardStates = ['feedback', 'empty-account', 'onboarding', 'detail', 'add-project', 'project-settings', 'inbox', 'billing', 'login', 'signup', 'forgot-password', 'reset-password', 'mcp-connections', 'mcp-consent', 'audit-new', 'agent-panel', 'super-admin']
+export const dashboardStates = ['feedback', 'empty-account', 'onboarding', 'detail', 'add-project', 'project-settings', 'inbox', 'billing', 'login', 'signup', 'forgot-password', 'reset-password', 'mcp-connections', 'mcp-consent', 'audit-new', 'agent-panel', 'agent-runs', 'brain', 'super-admin']
 export const authHandoffStates = ['widget-auth-login', 'extension-auth-login']
 export const widgetStates = ['idle', 'launcher', 'selecting', 'composer-filled', 'screenshot-failed', 'sending', 'send-error', 'submitted', 'name-entry', 'private-login', 'sidebar', 'sidebar-empty', 'sidebar-edit', 'tracker-picker']
 export const widgetAgentStates = ['ready', 'handoff', 'upgrade_required', 'error']
