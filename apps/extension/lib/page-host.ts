@@ -1,7 +1,7 @@
 import { getSelector } from '../../../src/lib/getSelector'
 import { buildTextRangeAnchor } from '../../../src/lib/textAnchor'
 import { captureNativeScreenshot } from './native-screenshot'
-import { toPagePercent } from '../../../src/components/FeedbackWidget/coords'
+import { findPinElement, fromPagePercentFixed, pinTargetVisible, toPagePercent } from '../../../src/components/FeedbackWidget/coords'
 import { receiveFrameMessages, sendFrameMessage } from './frame-channel'
 
 function hasValidCoordinates(x: number, y: number) {
@@ -35,13 +35,8 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
   }
   function state() {
     const liveIds = targets.filter(({ selector, x, y }) => {
-      const validCoordinates = hasValidCoordinates(x, y)
-      try {
-        const rect = document.querySelector(selector)?.getBoundingClientRect()
-        return Boolean((rect && (rect.width || rect.height)) || validCoordinates)
-      } catch {
-        return validCoordinates
-      }
+      const element = findPinElement(selector)
+      return element ? pinTargetVisible(element, fromPagePercentFixed(x, y)) : hasValidCoordinates(x, y)
     }).map(({ id }) => id)
     const embeddedProjectIds = Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt][data-crrt-project]'))
       .map((node) => node.dataset.crrtProject)

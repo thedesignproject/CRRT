@@ -1,11 +1,11 @@
 import { FeedbackAuthor, FeedbackContent, FeedbackSendButton } from './FeedbackParts'
 import { getSelector } from '../../lib/getSelector'
+import { clientToPagePercent, elementOffset } from './coords'
 import type { ClickTarget, Comment, ConversationComment, FeedbackConversationProps, FeedbackPosition, PersonalComments } from './types'
 
 export function positionAt(target: ClickTarget, clientX: number, clientY: number): ClickTarget {
   const rect = document.querySelector(target.selector)!.getBoundingClientRect()
-  const clamp = (value: number) => Math.max(0, Math.min(1, value))
-  return { ...target, elementX: rect.width ? clamp((clientX - rect.left) / rect.width) : .5, elementY: rect.height ? clamp((clientY - rect.top) / rect.height) : .5 }
+  return { ...target, ...elementOffset(rect, clientX, clientY) }
 }
 
 export function savedPosition(target: ClickTarget): FeedbackPosition | undefined {
@@ -13,12 +13,12 @@ export function savedPosition(target: ClickTarget): FeedbackPosition | undefined
   return { selector: target.selector, x: target.x, y: target.y, elementX: target.elementX, elementY: target.elementY }
 }
 
-export function positionedPoint(target: Pick<ClickTarget, 'selector' | 'elementX' | 'elementY'>) {
-  if (target.elementX === undefined || target.elementY === undefined) return null
-  const element = document.querySelector(target.selector)
+export function positionedPoint({ elementX, elementY }: Pick<ClickTarget, 'elementX' | 'elementY'>, element: Element | null) {
+  if (elementX === undefined || elementY === undefined) return null
   if (!element) return null
   const rect = element.getBoundingClientRect()
-  return { fixedX: rect.left + rect.width * target.elementX, fixedY: rect.top + rect.height * target.elementY }
+  if (!element.getClientRects().length && !rect.width && !rect.height) return null
+  return { fixedX: rect.left + rect.width * elementX, fixedY: rect.top + rect.height * elementY }
 }
 
 export function conversationSelector(element: Element, containerSelector: string): string {
@@ -41,13 +41,15 @@ export function conversationTarget(selection: string, containerSelector = 'body'
   const rect = root?.getBoundingClientRect()
   const target: ClickTarget = {
     selector: root ? containerSelector : 'body',
-    x: rect ? (rect.left + rect.width / 2 + window.scrollX) / document.documentElement.scrollWidth * 100 : 50,
-    y: rect ? (rect.top + rect.height / 2 + window.scrollY) / document.documentElement.scrollHeight * 100 : 20,
+    ...(rect ? clientToPagePercent(rect.left + rect.width / 2, rect.top + rect.height / 2) : { x: 50, y: 20 }),
     url: window.location.href,
     elementX: .5,
     elementY: .5,
   }
-  if (selection) target.anchor = { kind: 'text_range', selectedText: selection, normalizedText: selection, prefix: '', suffix: '', containerSelector: target.selector, startOffset: 0, endOffset: selection.length, createdFromUrl: target.url }
+  if (selection) {
+    target.targetType = 'text_range'
+    target.anchor = { kind: 'text_range', selectedText: selection, normalizedText: selection, prefix: '', suffix: '', containerSelector: target.selector, startOffset: 0, endOffset: selection.length, createdFromUrl: target.url }
+  }
   return target
 }
 
@@ -55,6 +57,7 @@ export function conversationComments(conversation: FeedbackConversationProps, pr
   return conversation.feedback.filter(item => !item.parentId).map(item => {
     const target = item.target ? { ...item.target, url: window.location.href } : conversationTarget(item.quote, conversation.containerSelector)
     return { ...target, id: item.id, projectId, pageUrl: target.url, body: item.body, authorName: item.author, reviewStatus: item.reviewStatus, editable: false, createdAt: item.createdAt,
+      targetType: item.quote ? 'text_range' : 'element_point',
       anchor: item.quote ? { kind: 'text_range', selectedText: item.quote, normalizedText: item.quote, prefix: '', suffix: '', containerSelector: target.selector, startOffset: 0, endOffset: item.quote.length, createdFromUrl: target.url } : null,
     }
   })

@@ -17,7 +17,7 @@ describe('extension comments API client', () => {
   it('lists exact-page comments with authenticated headers', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [comment] }), { status: 200 }))
     await expect(listPageComments('https://example.com/a?q=1#x')).resolves.toEqual({ items: [comment] })
-    expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/comments?pageUrl=https%3A%2F%2Fexample.com%2Fa%3Fq%3D1%23x&limit=50&page=1', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }))
+    expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/comments?pageUrl=https%3A%2F%2Fexample.com%2Fa%3Fq%3D1%23x&limit=50&page=1&elementPointAnchors=1', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }))
   })
 
   it('loads projects and scopes page comments to a selected project', async () => {
@@ -35,7 +35,7 @@ describe('extension comments API client', () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ items: [comment], total: 1 }), { status: 200 }))
     await listProjectComments('project', 2)
     expect(fetch).toHaveBeenCalledWith(
-      'https://crrt.ai/api/v1/extension/comments?projectId=project&limit=50&page=2',
+      'https://crrt.ai/api/v1/extension/comments?projectId=project&limit=50&page=2&elementPointAnchors=1',
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }),
     )
   })

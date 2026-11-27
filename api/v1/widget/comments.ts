@@ -3,6 +3,7 @@ import { getStringQuery, handleOptions, jsonError, methodNotAllowed } from '../.
 import { requireWidgetSession, assertWidgetPage, WidgetSessionError } from '../../_lib/widget-session.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import { listComments } from '../../_lib/store.js'
+import { widgetCommentList } from '../../_lib/anchor.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
@@ -11,9 +12,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = await requireWidgetSession(req)
     if (req.method === 'GET') {
       const comments = await listComments(session.project_key, { userId: session.user_id })
-      return res.status(200).json(comments.filter((comment) => {
+      const onOrigin = comments.filter((comment) => {
         try { return new URL(comment.pageUrl!).origin === session.origin } catch { return false }
-      }))
+      })
+      return res.status(200).json(widgetCommentList(onOrigin, req.query.elementPointAnchors))
     }
     if (req.method !== 'PATCH' && req.method !== 'DELETE') return methodNotAllowed(req, res, ['GET', 'PATCH', 'DELETE', 'OPTIONS'])
     const id = getStringQuery(req.query.id)

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { localComments } from './local-feedback'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
-import type { Comment, PersonalComments, WidgetPage } from '../../../src/components/FeedbackWidget/types'
+import type { WireComment, PersonalComments, WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { createPageComment, deletePageComment, extensionSession, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import { resolveProjectForPage, type ExtensionProjectSelection } from './project-context'
 
-function widgetComment(comment: ExtensionComment): Comment {
+function widgetComment(comment: ExtensionComment): WireComment {
   return {
     ...comment,
     projectId: comment.projectId ?? '',
@@ -61,7 +61,7 @@ export function extensionComments(
     },
     async list(pageUrl) {
       if (!await extensionSession()) return []
-      const items: Comment[] = []
+      const items: WireComment[] = []
       let page = 1
       let total: number
       do {
@@ -79,7 +79,7 @@ export function extensionComments(
         ...(project ? { visibility: canChooseVisibility ? visibility : 'shared' } : {}),
         pageUrl: payload.pageUrl as string, selector: payload.selector as string,
         x: payload.x as number, y: payload.y as number, body: payload.body as string,
-        targetType: payload.targetType as Comment['targetType'], anchor: payload.anchor as Comment['anchor'],
+        targetType: payload.targetType as WireComment['targetType'], anchor: payload.anchor as WireComment['anchor'],
         screenshot: payload.imageBase64 ? { base64: payload.imageBase64 as string, mimeType: payload.imageMimeType as string } : null,
       }))
     },

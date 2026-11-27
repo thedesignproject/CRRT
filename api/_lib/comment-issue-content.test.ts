@@ -50,6 +50,7 @@ describe('generateCommentIssueContent', () => {
 
     await expect(generateCommentIssueContent({
       ...comment,
+      targetType: 'text_range',
       anchor: {
         selectedText: 'Buy now',
         rangeClientRects: [{ left: 1, top: 2, width: 3, height: 4 }],

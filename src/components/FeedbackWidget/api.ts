@@ -1,5 +1,6 @@
 import { normalizeReviewStatus } from './format'
-import type { Comment } from './types'
+import type { Comment, WireComment } from './types'
+import { readElementPoint } from '../../lib/elementPoint'
 import { widgetRequest, type WidgetLoginSession } from '../../lib/widgetLogin'
 
 export interface AgentEligibility {
@@ -88,8 +89,14 @@ export async function startWidgetAgentUpgrade(
   })).json()
 }
 
-export async function fetchProjectComments(apiBase: string, projectId: string, onPrivacy?: (required: boolean) => void): Promise<Comment[]> {
-  const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
+export function normalizeCommentAnchor({ anchor, ...comment }: WireComment): Comment {
+  if (comment.targetType === 'text_range' && anchor && 'kind' in anchor) return { ...comment, anchor }
+  const point = comment.targetType === 'element_point' ? readElementPoint(anchor) : null
+  return { ...comment, ...point, anchor: null }
+}
+
+export async function fetchProjectComments(apiBase: string, projectId: string, onPrivacy?: (required: boolean) => void): Promise<WireComment[]> {
+  const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}&elementPointAnchors=1`)
   if (!res.ok && res.status !== 401) throw new Error('Could not refresh feedback')
   onPrivacy?.(res.status === 401)
   if (res.status === 401) return []
@@ -98,7 +105,7 @@ export async function fetchProjectComments(apiBase: string, projectId: string, o
   if (!Array.isArray(data)) throw new Error('Invalid feedback response')
 
   return data.map((comment) => {
-    const c = comment as Comment
+    const c = comment as WireComment
     return {
       ...c,
       reviewStatus: normalizeReviewStatus((comment as { reviewStatus?: unknown }).reviewStatus),
@@ -135,7 +142,7 @@ export async function postComment(
   apiBase: string,
   payload: Record<string, unknown>,
   onLoginRequired?: () => void,
-): Promise<Partial<Comment> | null> {
+): Promise<Partial<WireComment> | null> {
   const res = await fetch(`${apiBase}/v1/public/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -153,7 +160,7 @@ export async function postComment(
     console.warn('[FeedbackWidget] API returned', res.status)
     throw new Error('Could not send feedback. Try again.')
   }
-  return (await res.json()) as Partial<Comment>
+  return (await res.json()) as Partial<WireComment>
 }
 
 export async function patchReviewStatus(apiBase: string, id: string, reviewStatus: string): Promise<void> {

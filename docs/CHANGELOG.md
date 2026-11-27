@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Touch screens show an Exit button while choosing what to comment on, so you can leave comment mode without a keyboard.
+
+### Changed
+- New comments save a selector that points at the clicked element even when an active state moves between cards that share a class, or nearby ids repeat. Selectors shown in the dashboard, issues and agent context can look different from before; saved selectors still resolve.
+- Comment thumbnails show the whole screenshot instead of cropping it to fill the preview.
+
+### Fixed
+- Comment screenshots show the element you selected. Previously, scrolling right after a click, smooth scrolling, or entrance animations could capture a different part of the page or a blank area, as on the crrt.ai home page.
+- Comments on selected text now include a screenshot of the selection.
+- In comment mode, links that navigate as soon as they are pressed (as in the Next.js docs sidebar) no longer leave the page; the click drops a comment instead.
+- Screenshots no longer fail on pages using some multi-value font settings (as in the Vercel docs), and no longer paint closed menus kept in hidden web-component slots over the selected element (as on MDN).
+- No screenshot is attached when the selected element is entirely outside the visible area, instead of a picture of something else.
+- Pins stay on their spot in the element through scrolling, resizing, switching between desktop and mobile widths, and content loading above them, including on iPhone Safari. Pins hide while their element is hidden, removed, or scrolled out of its panel.
+- Saved screenshots stored in the page open when clicked, instead of opening a blank tab.
+- On narrow screens, the launcher no longer covers the screenshot while you write a comment.
+
 ## [0.3.27] - Unreleased
 
 ### Fixed

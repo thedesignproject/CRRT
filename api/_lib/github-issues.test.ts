@@ -110,6 +110,17 @@ describe('GitHub issue formatting', () => {
     expect(body).not.toContain('Suffix:')
   })
 
+  it('keeps element selectors clean and leaves the text-range section out of a point issue', () => {
+    const body = formatGithubIssueBody({
+      ...comment,
+      targetType: 'element_point',
+      anchor: { elementX: .25, elementY: .75, selectedText: 'unexpected legacy field' },
+    }, content, '<!-- marker -->')
+    expect(body).toContain('Selector: `#hero`')
+    expect(body).toContain('Target type: element_point')
+    expect(body).not.toContain('Selected text:')
+  })
+
   it('sanitizes embedded markers in an editable draft and appends the signed marker once', () => {
     const body = formatEditableGithubIssueBody('Custom body\n\n<!-- crrt-comment:copied:bad -->', '<!-- signed -->')
     expect(body).toBe('Custom body\n\n<!-- signed -->')

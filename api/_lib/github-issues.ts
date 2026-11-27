@@ -130,7 +130,7 @@ export function formatGithubIssueBody(
     selected.push(`Coordinates: ${comment.x}, ${comment.y}`)
   }
   if (comment.targetType) selected.push(`Target type: ${comment.targetType}`)
-  if (comment.anchor) {
+  if (comment.targetType === 'text_range' && comment.anchor) {
     const labels: Record<string, string> = {
       selectedText: 'Selected text',
       prefix: 'Prefix',

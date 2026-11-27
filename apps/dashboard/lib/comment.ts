@@ -33,7 +33,7 @@ export function mapServerComment(record: CommentRecord): Comment {
     authorColor: authorColorFor(author),
     screenshotUrl: record.imageUrl,
     targetType: record.targetType ?? 'element_point',
-    anchor: record.anchor ?? null,
+    anchor: record.targetType === 'text_range' && record.anchor && 'kind' in record.anchor ? record.anchor : null,
     githubIssue: record.githubIssue ?? null,
     externalWork: record.externalWork ?? [],
   }

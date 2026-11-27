@@ -183,6 +183,21 @@ export function FeedbackWidgetStyles() {
           0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
           100% { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
+        [data-fw-crrt] .fw-touch-selection-exit {
+          display: none;
+        }
+        @media (any-pointer: coarse) {
+          [data-fw-crrt] .fw-touch-selection-exit {
+            display: inline-flex;
+            bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+          }
+          [data-fw-crrt] .fw-touch-selection-exit,
+          [data-fw-crrt] .fw-selecting-instruction-action {
+            min-width: 44px;
+            min-height: 44px;
+            flex-shrink: 0;
+          }
+        }
         .fw-rec-dot {
           animation: fw-rec-pulse 1.5s ease-in-out infinite;
         }

@@ -48,9 +48,26 @@ describe('parseCommentTarget', () => {
     expectError('pixel_blob', undefined, 'targetType must be')
   })
 
-  it('rejects an anchor without text_range targetType', () => {
-    expectError(undefined, validAnchor, 'only valid when targetType')
-    expectError('element_point', validAnchor, 'only valid when targetType')
+  it('requires an explicit target type for a non-null anchor', () => {
+    expectError(undefined, validAnchor, 'requires an explicit targetType')
+  })
+
+  it('accepts a bounded element point and the legacy null shape', () => {
+    const anchor = { elementX: 0, elementY: 1 }
+    expect(parseCommentTarget('element_point', anchor)).toEqual({ ok: true, targetType: 'element_point', anchor })
+    expect(parseCommentTarget('element_point', null)).toEqual({ ok: true, targetType: 'element_point', anchor: null })
+  })
+
+  it.each([
+    validAnchor, [], 'point', { elementX: .5 }, { elementY: .5, other: .25 }, { elementX: .5, other: .25 },
+    { elementX: .5, elementY: .5, extra: true },
+    { elementX: -0.01, elementY: .5 }, { elementX: 1.01, elementY: .5 },
+    { elementX: .5, elementY: -0.01 }, { elementX: .5, elementY: 1.01 },
+    { elementX: NaN, elementY: .5 }, { elementX: .5, elementY: Infinity },
+    { elementX: '0.5', elementY: .5 }, { elementX: .5, elementY: '0.5' },
+    { 'elementX,elementY': 1 },
+  ])('rejects malformed element point %#', anchor => {
+    expectError('element_point', anchor, 'only elementX and elementY')
   })
 
   it('accepts a valid text_range anchor and strips unknown keys', () => {

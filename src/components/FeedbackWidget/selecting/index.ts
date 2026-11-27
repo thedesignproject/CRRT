@@ -1,1 +1,1 @@
-export { SelectingInstructionBar } from './SelectingInstructionBar'
+export { SelectingInstructionBar, TouchSelectionExit } from './SelectingInstructionBar'

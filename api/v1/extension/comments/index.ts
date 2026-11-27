@@ -3,6 +3,7 @@ import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { createExtensionComment, ExtensionCommentError, listExtensionComments } from '../../../_lib/extension-comments.js'
 import { feedbackVisibilityForRole, type FeedbackVisibility } from '../../../_lib/project-capabilities.js'
 import { handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
+import { widgetCommentList } from '../../../_lib/anchor.js'
 
 const METHODS = ['GET', 'POST', 'OPTIONS']
 
@@ -30,11 +31,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const visibility: FeedbackVisibility = access
       ? feedbackVisibilityForRole(access.role, requestedVisibility)
       : 'shared'
-    const result = req.method === 'GET'
-      ? await listExtensionComments(user.userId, { ...req.query, projectId }, access?.role === 'guest' ? 'shared' : undefined)
-      : await createExtensionComment(user.userId, req.body ?? {}, projectId, user.email, visibility)
+    if (req.method === 'GET') {
+      const result = await listExtensionComments(user.userId, { ...req.query, projectId }, access?.role === 'guest' ? 'shared' : undefined)
+      setCors(req, res, METHODS)
+      return res.status(200).json({ ...result, items: widgetCommentList(result.items, req.query.elementPointAnchors) })
+    }
+    const result = await createExtensionComment(user.userId, req.body ?? {}, projectId, user.email, visibility)
     setCors(req, res, METHODS)
-    return res.status(req.method === 'POST' ? 201 : 200).json(result)
+    return res.status(201).json(result)
   } catch (error) {
     if (error instanceof ExtensionCommentError) return jsonError(req, res, error.status, error.message, error)
     console.error(error)

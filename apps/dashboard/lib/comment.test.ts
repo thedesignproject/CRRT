@@ -33,6 +33,25 @@ describe('mapServerComment', () => {
       author: 'Anonymous',
       externalWork: [expect.objectContaining({ provider: 'linear', externalKey: 'WEB-7' })],
     })
+    expect(mapServerComment({
+      ...record, selector: '#buy', targetType: 'element_point', anchor: { elementX: .2, elementY: .8 },
+    })).toMatchObject({ selector: '#buy', anchor: null })
+    const anchor = {
+      kind: 'text_range' as const,
+      selectedText: 'Feedback',
+      normalizedText: 'Feedback',
+      prefix: '',
+      suffix: '',
+      startOffset: 0,
+      endOffset: 8,
+      containerSelector: '#copy',
+      createdFromUrl: '/page',
+    }
+    expect(mapServerComment({ ...record, targetType: 'text_range', anchor }).anchor).toEqual(anchor)
+    expect(mapServerComment({ ...record, targetType: 'text_range', anchor: null }).anchor).toBeNull()
+    expect(mapServerComment({
+      ...record, targetType: 'text_range', anchor: { elementX: .2, elementY: .8 },
+    }).anchor).toBeNull()
   })
 
   it('keeps agent-ready, testing, and done work in separate queues', () => {

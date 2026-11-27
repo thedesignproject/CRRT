@@ -68,14 +68,34 @@ it('resolves element-relative positions through layout changes and handles missi
   let left = 100; element.getBoundingClientRect = () => ({ left, top: 50, width: 200, height: 100 } as DOMRect)
   const target = positionAt({ selector: '#position-test', x: 15, y: 10, url: 'https://local.test' }, 150, 80)
   expect(savedPosition(target)).toEqual({ selector: '#position-test', x: 15, y: 10, elementX: .25, elementY: .3 })
-  expect(positionedPoint(target)).toEqual({ fixedX: 150, fixedY: 80 }); left = 200
-  expect(positionedPoint(target)).toEqual({ fixedX: 250, fixedY: 80 })
+  expect(positionedPoint(target, element)).toEqual({ fixedX: 150, fixedY: 80 }); left = 200
+  expect(positionedPoint(target, element)).toEqual({ fixedX: 250, fixedY: 80 })
   expect(savedPosition({ ...target, elementX: undefined })).toBeUndefined()
-  expect(positionedPoint({ ...target, elementX: undefined })).toBeNull()
-  expect(positionedPoint({ ...target, selector: '#missing' })).toBeNull()
+  expect(positionedPoint({ ...target, elementX: undefined }, element)).toBeNull()
+  expect(positionedPoint(target, null)).toBeNull()
   expect(positionAt({ ...target, selector: '#position-test' }, -100, 1000)).toMatchObject({ elementX: 0, elementY: 1 })
-  element.getBoundingClientRect = () => ({ left, top: 50, width: 0, height: 0 } as DOMRect)
-  expect(positionAt(target, 1, 1)).toMatchObject({ elementX: .5, elementY: .5 }); element.remove()
+  const getClientRects = vi.spyOn(element, 'getClientRects').mockReturnValue([] as unknown as DOMRectList)
+  element.getBoundingClientRect = () => new DOMRect(left, 50, 0, 30)
+  expect(positionedPoint(target, element)).toEqual({ fixedX: left, fixedY: 59 })
+  element.getBoundingClientRect = () => new DOMRect(left, 50, 0, 0)
+  expect(positionAt(target, 1, 1)).toMatchObject({ elementX: .5, elementY: .5 })
+  expect(positionedPoint(target, element)).toBeNull()
+  getClientRects.mockReturnValue([element.getBoundingClientRect()] as unknown as DOMRectList)
+  expect(positionedPoint(target, element)).toEqual({ fixedX: left, fixedY: 50 })
+  element.remove()
+})
+
+it('draws no pin for hosted feedback whose target element is gone', async () => {
+  const live = document.createElement('p'); live.id = 'live-target'; document.body.append(live)
+  vi.spyOn(live, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 60, 200, 30))
+  const at = (selector: string) => ({ selector, x: 20, y: 30, elementX: .5, elementY: .5 })
+  const feedback = [{ ...note, target: at('#live-target') }, { ...note, id: 'gone', target: at('#gone-target') }]
+  try {
+    render(<FeedbackWidget projectId="host" conversation={conversation({ feedback })} />)
+    await waitFor(() => expect(document.querySelectorAll('[data-fw-pin]')).toHaveLength(1))
+  } finally {
+    live.remove()
+  }
 })
 
 it('builds legacy quote targets and host-supplied pin targets without exposing replies as root pins', () => {
@@ -126,6 +146,8 @@ it('captures the actual click within host content and keeps a pending draft on n
   fireEvent.click(screen.getByRole('button', { name: 'Add feedback' }))
   await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ target: expect.objectContaining({ selector: '.capture-root > p:nth-of-type(1)', elementX: .3, elementY: .3 }) })))
   view.rerender(<><div className="capture-root"><p id="capture-point">A capture target.</p></div><FeedbackWidget projectId="host" conversation={conversation({ containerSelector: '.capture-root', authorName: 'Owner', feedback: [{ ...note, target: { selector: '#capture-point', x: 20, y: 20, elementX: .3, elementY: .3 } }] })} /></>)
+  screen.getByText('A capture target.').getBoundingClientRect = paragraph.getBoundingClientRect
+  fireEvent.resize(window)
   await waitFor(() => expect(document.querySelector('[data-fw-pin]')).toBeInTheDocument())
 })
 
@@ -141,6 +163,23 @@ it.each(['.capture-root',undefined])('uses the native text-range selection in %s
   fireEvent.click(screen.getByRole('button', { name: 'Discard feedback' })); window.getSelection()!.removeAllRanges()
   fireEvent.keyDown(document, { key: 'c' }); view.rerender(<><div className="capture-root"><p>Selected passage.</p></div><FeedbackWidget projectId="host" conversation={{ ...props, readOnly: true }} /></>)
   fireEvent.click(screen.getByText('Selected passage.')); expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument()
+})
+
+it('passes the original selection to the host and respects a declined range', () => {
+  const onTextSelection = vi.fn((_range: Range) => false)
+  render(<><p>Declined passage.</p><FeedbackWidget projectId="host" conversation={conversation({ authorName: 'Owner', onTextSelection })} /></>)
+  const paragraph = screen.getByText('Declined passage.')
+  const range = document.createRange()
+  range.selectNodeContents(paragraph)
+  fireEvent.keyDown(document, { key: 'c' })
+  window.getSelection()!.addRange(range)
+  try {
+    fireEvent.click(paragraph)
+    expect(onTextSelection.mock.calls[0]?.[0]).toBe(range)
+    expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument()
+  } finally {
+    window.getSelection()!.removeAllRanges()
+  }
 })
 
 it('allows a host to capture the page when it does not restrict the content container', () => {

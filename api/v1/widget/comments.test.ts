@@ -11,6 +11,12 @@ function response() { return { setHeader: vi.fn(), status: vi.fn().mockReturnThi
 async function call(method: string, query = { id: 'c' }, body: unknown = { body: ' hello ' }) {
   const res = response(); await handler({ method, headers: {}, query, body } as never, res as never); return res
 }
+it('hides point anchors from older signed-in widgets', async () => {
+  const point = { id: 'point', pageUrl: origin, targetType: 'element_point', anchor: { elementX: .5, elementY: .25 } }
+  vi.mocked(listComments).mockResolvedValue([point] as never)
+  expect((await call('GET')).json).toHaveBeenCalledWith([{ ...point, anchor: null }])
+  expect((await call('GET', { elementPointAnchors: '1' } as never)).json).toHaveBeenCalledWith([point])
+})
 function db(results = [{ data: { url: `${origin}/page` }, error: null }, { data: { id: 'c' }, error: null }] as any[]) {
   const q: any = {}; for (const name of ['select', 'eq', 'delete', 'update']) q[name] = vi.fn(() => q)
   q.maybeSingle = vi.fn(async () => results.shift())

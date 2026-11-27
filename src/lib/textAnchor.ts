@@ -106,6 +106,34 @@ function walkToBoundary(
   }
 }
 
+export function getRangeRect(range: RangeLike, container: Element): RangeRect {
+  const rect = range.getBoundingClientRect()
+  return rect.width || rect.height ? rect : container.getBoundingClientRect()
+}
+
+export function restoreTextRange(anchor: TextRangeAnchor, container: Element): Range | null {
+  const text = container.textContent as string
+  if (anchor.startOffset < 0 || anchor.startOffset >= anchor.endOffset || text.slice(anchor.startOffset, anchor.endOffset) !== anchor.selectedText) return null
+
+  const range = document.createRange()
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let offset = 0
+  let started = false
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const end = offset + (node as Text).length
+    if (!started && anchor.startOffset < end) {
+      range.setStart(node, anchor.startOffset - offset)
+      started = true
+    }
+    if (started && anchor.endOffset <= end) {
+      range.setEnd(node, anchor.endOffset - offset)
+      return range
+    }
+    offset = end
+  }
+  return null
+}
+
 /**
  * Serializes a live text selection into a portable hybrid anchor (exact quote
  * + prefix/suffix context + text-position offsets + container selector).
@@ -153,8 +181,7 @@ export function buildTextRangeAnchor(
 
   // happy-dom (and detached ranges) report zero-sized range rects; fall back
   // to the container's rect so the pin/popover still lands somewhere sane.
-  const rangeRect = range.getBoundingClientRect()
-  const rect = rangeRect.width === 0 && rangeRect.height === 0 ? container.getBoundingClientRect() : rangeRect
+  const rect = getRangeRect(range, container)
   const midpointClient = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
 
   return { anchor, container, midpointClient }
