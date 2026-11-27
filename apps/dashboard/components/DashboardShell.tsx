@@ -6,6 +6,7 @@ import { Kbd } from '@crrt/ui/components/kbd'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import type { Project } from '../api'
 import { usePlanQuota } from '../hooks/usePlanQuota'
+import { useWorkspace } from '../hooks/useWorkspace'
 import { landingRoute, route } from '../lib/routes'
 import type { StatusFilter } from '../lib/types'
 import { NotificationBell } from './NotificationBell'
@@ -110,6 +111,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const quota = usePlanQuota(apiBase, accessToken, user.id)
+  const workspace = useWorkspace(apiBase, accessToken)
   // Picking any destination leaves the New project page.
   const leave = (go: () => void) => () => { onLeaveNewProject?.(); go() }
   const selected = projects.find((p) => p.publicKey === selectedProject)
@@ -139,7 +141,9 @@ export function DashboardShell({
   const projectItems: NavItem[] = projects.map((p) => ({
     id: p.publicKey,
     label: p.name,
-    count: p.publicKey === activeId && !commentsLoading && commentCount > 0 ? commentCount : undefined,
+    // Open feedback from the server; the loaded list's size for the active project when the server doesn't say.
+    count: (p.openCount ?? (p.publicKey === activeId && !commentsLoading ? commentCount : 0)) || undefined,
+    live: p.agentLive,
     onSelect: leave(() => { setSelectedProject(p.publicKey); setStatusFilter('open'); setSelectedCommentId('') }),
   }))
 
@@ -161,6 +165,7 @@ export function DashboardShell({
       className="dashboard-shell md:h-dvh md:overflow-hidden"
       homeHref={landingRoute('?stay=1')}
       homeLabel="CRRT marketing site"
+      workspace={workspace.name}
       nav={nav}
       projects={projectItems}
       projectsEmpty={projectsLoading ? 'Loading projects…' : projectsError ? <span role="alert">{projectsError}</span> : 'No projects yet'}
@@ -195,6 +200,7 @@ export function DashboardShell({
             auditHref={route(`/audits/new${projectQuery}`)}
             documentsHref={route(`/documents${projectQuery}`)}
             onOpenSuperAdmin={superadmin ? leave(onOpenSuperAdmin) : undefined}
+            workspace={{ name: workspace.name, onRename: workspace.rename }}
           />
         </TopBar>
       }

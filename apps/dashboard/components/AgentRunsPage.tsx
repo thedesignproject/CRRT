@@ -1,7 +1,7 @@
 import { Bot } from 'lucide-react'
 import { AgentRunCard, EmptyState, type AgentStep } from '@crrt/ui/crrt'
-import type { ShareEventsResponse } from '../api'
-import { describeEvent } from '../lib/format'
+import type { AgentRun, ShareEventsResponse } from '../api'
+import { describeEvent, timeAgo } from '../lib/format'
 import type { Comment } from '../lib/types'
 import { AgentError, LiveQueue } from './AgentHandoff'
 
@@ -21,17 +21,29 @@ interface AgentRunsPageProps {
   onRetry?: () => void
   onOpenComment: (id: string) => void
   onOpenNextSteps: () => void
+  /** The project's runs, newest first; runs is null while they load. */
+  pastRuns: { runs: AgentRun[] | null; error: string | null }
 }
 
 const STEP_LIMIT = 8
+
+const OUTCOME: Record<AgentRun['outcome'], { label: string; dot: string; text: string }> = {
+  running: { label: 'Running', dot: 'bg-agent-working', text: 'text-agent-working' },
+  completed: { label: 'Completed', dot: 'bg-agent-done', text: 'text-agent-done' },
+  blocked: { label: 'Blocked', dot: 'bg-agent-paused', text: 'text-agent-paused' },
+  stopped: { label: 'Stopped', dot: 'bg-agent-idle', text: 'text-text-subtle' },
+}
+
+const minutes = (run: AgentRun) => Math.max(1, Math.round((Date.parse(run.endedAt) - Date.parse(run.startedAt)) / 60_000))
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 function clock(iso: string) {
   const date = new Date(iso)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-/** The live agent session for the selected project. History needs a backend; see the PR notes. */
-export function AgentRunsPage({ projectName, agentName, connected, queue, events, agentError, agentErrorCode, notice, selectedCommentId, onUpgrade, onRetry, onOpenComment, onOpenNextSteps }: AgentRunsPageProps) {
+/** The live agent session for the selected project, then its past runs. */
+export function AgentRunsPage({ projectName, agentName, connected, queue, events, agentError, agentErrorCode, notice, selectedCommentId, onUpgrade, onRetry, onOpenComment, onOpenNextSteps, pastRuns }: AgentRunsPageProps) {
   const open = queue.filter((c) => c.implementationStatus !== 'done' && c.implementationStatus !== 'ready_for_testing').length
   const steps: AgentStep[] = events.slice(-STEP_LIMIT).map((ev, i, list) => ({
     t: clock(ev.createdAt),
@@ -69,9 +81,29 @@ export function AgentRunsPage({ projectName, agentName, connected, queue, events
             Send next steps to an agent and its run shows up here live.
           </EmptyState>
         )}
-        <p className="flex items-center gap-2 text-xs text-text-subtle">
-          <Bot className="size-3.5" /> Runs show here while an agent is connected. Past runs aren't kept yet.
-        </p>
+        <section aria-labelledby="runs-past" className="flex flex-col gap-3">
+          <h2 id="runs-past" className="text-[15px] font-semibold">Past runs</h2>
+          {pastRuns.error ? (
+            <p role="alert" className="text-xs text-destructive">Couldn’t load past runs: {pastRuns.error}</p>
+          ) : !pastRuns.runs ? (
+            <p role="status" className="text-xs text-text-subtle">Loading past runs…</p>
+          ) : pastRuns.runs.length === 0 ? (
+            <p className="text-xs text-text-subtle">No agent has run in {projectName} yet.</p>
+          ) : (
+            <ul aria-label="Past runs" className="flex flex-col">
+              {pastRuns.runs.map((run) => (
+                <li key={run.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-sidebar-border py-2.5">
+                  <span aria-hidden="true" className={`size-2 rounded-full ${OUTCOME[run.outcome].dot}`} />
+                  <span className="font-medium text-text-strong">{run.agentLabel}</span>
+                  <span className={`text-xs ${OUTCOME[run.outcome].text}`}>{OUTCOME[run.outcome].label}</span>
+                  <span className="ml-auto font-mono text-xs text-text-subtle">
+                    {timeAgo(run.startedAt)} · {minutes(run)} min · {plural(run.steps, 'step')} · {run.commentsCompleted} completed
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </section>
   )

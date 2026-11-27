@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
+import type { NextStepRecord } from '../api'
 import type { Comment } from '../lib/types'
 import { NextStepsPage } from './NextStepsPage'
 import { delivery } from '../hooks/direct-delivery.fixture'
@@ -49,6 +50,19 @@ it('waits after a copy, links to the run once connected, and blocks copy without
   expect(connected.props.onOpenRuns).toHaveBeenCalledOnce()
 })
 
+it('says "your agent" in sentences when the handoff is a plain prompt', () => {
+  const base = page()
+  const prompt = { ...base.props.handoff, selectedAgent: 'prompt', selectedAgentMeta: { id: 'prompt', name: 'Copy as prompt', hint: '', target: 'generic' as const } }
+  try { localStorage.removeItem('crrt:dashboard:handoff-hint-seen') } catch {}
+  const view = render(page({ handoff: prompt }).ui)
+  expect(screen.getByText(/^Paste into your agent — /)).toBeInTheDocument()
+  view.rerender(page({ handoff: { ...prompt, copyStatus: 'copied' } }).ui)
+  expect(screen.getByText('Waiting for your agent…')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Paste into your agent' })).toBeInTheDocument()
+  view.rerender(page({ handoff: prompt, agentConnected: true }).ui)
+  expect(screen.getByText(/^Your agent is connected\./)).toBeInTheDocument()
+})
+
 it('explains an empty queue and agent errors', () => {
   const view = render(page({ comments: [] }).ui)
   expect(screen.getByText('Nothing ready for an agent in Acme.')).toBeInTheDocument()
@@ -81,4 +95,69 @@ it('keeps the prompt handoff when no terminal can take the send or direct send i
   view.rerender(page({ direct: delivery({ enabled: false }) }).ui)
   expect(screen.queryByRole('region', { name: 'Send to a terminal' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Send 2 crrts to Codex' })).toBeEnabled()
+})
+
+const step = (id: string, commentIds: string[], over: Partial<NextStepRecord> = {}): NextStepRecord => ({
+  id, title: `Step ${id}`, tag: 'copy', status: 'open', createdAt: '',
+  comments: commentIds.map((c) => ({ id: c, body: c, authorName: 'Ada' })), requesters: ['Ada', 'Bo'],
+  citations: [{ ruleId: 'r1', title: 'Short headlines' }], conflict: null, ...over,
+})
+const steps = (list: NextStepRecord[] | null, error: string | null = null) => ({ steps: list, error, onAnswer: vi.fn(async () => {}) })
+
+it('lists one row per step with its tag, requesters, comments and rule, plus comments no step covers', () => {
+  const states: Record<string, string> = { c2: 'working' }
+  const { props, ui } = page({
+    comments: [comment('c1', 'One'), comment('c2', 'Two'), comment('c3', 'Three')],
+    nextSteps: steps([step('s1', ['c1', 'c2']), step('s2', ['other'])]),
+    direct: delivery({ stateFor: (id) => states[id] }),
+  })
+  render(ui)
+  expect(screen.getByText('3 ready for an agent in Acme.')).toBeInTheDocument()
+  const rows = within(screen.getByRole('list', { name: 'Next steps' })).getAllByRole('listitem')
+  expect(rows).toHaveLength(2)
+  expect(within(rows[0]).getByText('copy')).toBeInTheDocument()
+  expect(within(rows[0]).getByText('2 comments')).toBeInTheDocument()
+  expect(within(rows[0]).getByText('Bo')).toBeInTheDocument()
+  expect(within(rows[0]).getByText('· Follows: Short headlines')).toBeInTheDocument()
+  expect(within(rows[0]).getByText('· Agent working')).toBeInTheDocument()
+  expect(within(rows[1]).getByText('1 comment')).toBeInTheDocument()
+  fireEvent.click(within(rows[0]).getByRole('button', { name: 'Step s1' }))
+  expect(props.onOpenComment).toHaveBeenCalledWith('c1')
+  fireEvent.click(within(rows[1]).getByRole('button', { name: 'Three' }))
+  expect(props.onOpenComment).toHaveBeenLastCalledWith('c3')
+  fireEvent.click(screen.getByRole('button', { name: 'Send 2 crrts to term l1' }))
+  expect(props.direct!.send).toHaveBeenCalledWith([expect.objectContaining({ id: 'c1' }), expect.objectContaining({ id: 'c3' })])
+})
+
+it('keeps per-comment rows while steps load and says when grouping fails', () => {
+  const view = render(page({ nextSteps: steps(null) }).ui)
+  expect(within(screen.getByRole('list', { name: 'Next steps' })).getAllByRole('listitem')).toHaveLength(2)
+  expect(screen.queryByRole('alert')).toBeNull()
+  view.rerender(page({ nextSteps: steps(null, 'Offline') }).ui)
+  expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t group next steps: Offline')
+  expect(screen.getByRole('button', { name: 'Add a date' })).toBeInTheDocument()
+})
+
+it('asks to keep or update the rule a paused step conflicts with', async () => {
+  const conflict = { ruleId: 'r1', ruleTitle: 'Short headlines', question: 'The new headline has 12 words. Keep the rule?', decision: null }
+  const paused = steps([step('s1', ['c1'], { status: 'paused', conflict }), step('s2', ['c2'], { conflict: { ...conflict, ruleTitle: null, decision: 'keep_rule' } })])
+  paused.onAnswer.mockRejectedValueOnce(new Error('This step is not waiting for an answer'))
+  render(page({ nextSteps: paused }).ui)
+  const group = screen.getByRole('group', { name: 'Rule conflict' })
+  expect(screen.getAllByRole('group', { name: 'Rule conflict' })).toHaveLength(1)
+  expect(group).toHaveTextContent('Paused · needs you · Short headlines')
+  expect(group).toHaveTextContent('The new headline has 12 words. Keep the rule?')
+  fireEvent.click(within(group).getByRole('button', { name: 'Keep rule' }))
+  expect(within(group).getByRole('button', { name: 'Update rule' })).toBeDisabled()
+  expect(await within(group).findByRole('alert')).toHaveTextContent('This step is not waiting for an answer')
+  expect(paused.onAnswer).toHaveBeenCalledWith('s1', 'keep_rule')
+  fireEvent.click(within(group).getByRole('button', { name: 'Update rule' }))
+  await waitFor(() => expect(within(group).queryByRole('alert')).toBeNull())
+  expect(paused.onAnswer).toHaveBeenLastCalledWith('s1', 'update_rule')
+  expect(within(group).getByRole('button', { name: 'Keep rule' })).toBeEnabled()
+})
+
+it('names a conflict without a rule title', () => {
+  render(page({ nextSteps: steps([step('s1', ['c1'], { status: 'paused', conflict: { ruleId: null, ruleTitle: null, question: 'Why?', decision: null } })]) }).ui)
+  expect(screen.getByText('Paused · needs you')).toBeInTheDocument()
 })

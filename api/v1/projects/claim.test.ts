@@ -75,6 +75,11 @@ describe('api/v1/projects/claim', () => {
     await call({ method: 'POST', body: { projectKey: 'k' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(claimProject).toHaveBeenCalledWith('u', 'k', undefined)
+    // The claimer owns the project, with the same access shape as GET /v1/projects.
+    expect(res.body).toEqual({
+      publicKey: 'k', role: 'owner',
+      capabilities: ['feedback:read', 'feedback:create', 'feedback:manage', 'agent:operate', 'integrations:send', 'project:manage'],
+    })
 
     // name is trimmed and forwarded for the create-and-claim path
     vi.mocked(claimProject).mockResolvedValueOnce({ publicKey: 'k' } as never)

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../_lib/store.js', () => ({
+  deleteOwnedProject: vi.fn(),
   getProject: vi.fn().mockResolvedValue(null),
   getProjectMember: vi.fn(),
   updateProject: vi.fn(),
@@ -11,7 +12,7 @@ vi.mock('../../../_lib/store.js', () => ({
 
 import handler from './index.js'
 import { requireUser } from '../../../_lib/auth.js'
-import { getProject, getProjectMember, updateProject } from '../../../_lib/store.js'
+import { deleteOwnedProject, getProject, getProjectMember, updateProject } from '../../../_lib/store.js'
 
 function mockRes() {
   return {
@@ -252,4 +253,42 @@ it('reports a retryable conflict while an outbound tracker dispatch is unresolve
  vi.mocked(updateProject).mockRejectedValueOnce(new Error('tracker_dispatch_in_progress'))
  const res=mockRes();await call({method:'PATCH',query:{projectId:'p'},headers:{},body:{widgetPrivate:true}},res)
  expect(res.statusCode).toBe(409);expect(res.body).toEqual({error:expect.stringContaining('tracker export')})
+})
+
+describe('api/v1/projects/[projectId] DELETE', () => {
+  const remove = async (projectId = 'p') => {
+    const res = mockRes()
+    await call({ method: 'DELETE', query: { projectId }, headers: {} }, res)
+    return res
+  }
+  beforeEach(() => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+    vi.mocked(deleteOwnedProject).mockReset()
+  })
+
+  it('deletes an owned project and answers 204', async () => {
+    vi.mocked(deleteOwnedProject).mockResolvedValueOnce('deleted')
+    const res = await remove()
+    expect(res.statusCode).toBe(204)
+    expect(deleteOwnedProject).toHaveBeenCalledWith('p', 'u')
+  })
+
+  it('answers 404 for an unknown project, 403 for anyone but the owner, and 400 without a key', async () => {
+    vi.mocked(deleteOwnedProject).mockResolvedValueOnce('not_found')
+    expect((await remove()).statusCode).toBe(404)
+    vi.mocked(deleteOwnedProject).mockResolvedValueOnce('forbidden')
+    expect((await remove()).statusCode).toBe(403)
+    expect((await remove('')).statusCode).toBe(400)
+    expect(deleteOwnedProject).toHaveBeenCalledTimes(2)
+  })
+
+  it('answers 409 while a tracker export or delivery holds the project, and 500 otherwise', async () => {
+    for (const code of ['tracker_dispatch_in_progress', 'feedback_delivery_in_progress', 'project_membership_busy']) {
+      vi.mocked(deleteOwnedProject).mockRejectedValueOnce(new Error(code))
+      expect((await remove()).statusCode).toBe(409)
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(deleteOwnedProject).mockRejectedValueOnce('db down')
+    expect((await remove()).statusCode).toBe(500)
+  })
 })

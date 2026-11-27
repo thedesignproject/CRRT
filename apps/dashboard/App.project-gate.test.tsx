@@ -20,6 +20,9 @@ vi.mock('./hooks/useAuth', () => ({
 vi.mock('./hooks/useProjects', () => ({
   useProjects: () => ({ projects: fixtures.projects, loading: false, error: null, claimProject: fixtures.claim, checkAvailability: fixtures.check, refresh: fixtures.fn }),
 }))
+vi.mock('./components/ProjectSettings', () => ({
+  ProjectSettings: ({ onDeleted }: { onDeleted: () => Promise<void> }) => <button onClick={() => { void onDeleted() }}>Confirm delete</button>,
+}))
 vi.mock('./hooks/useComments', () => ({
   useComments: () => ({ comments: fixtures.comments, commentsProjectId: null, loading: false, error: null, refresh: fixtures.fn }),
 }))
@@ -62,6 +65,18 @@ it('creates the first project when its prompt is copied', async () => {
   expect(fixtures.claim).toHaveBeenCalledWith('acme', 'Acme')
   expect(await screen.findByText(/Waiting for the first pin on/)).toBeInTheDocument()
   expect(assign).not.toHaveBeenCalled()
+})
+
+it('refreshes the list and opens onboarding after the last project is deleted', async () => {
+  fixtures.projects = [{ publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' }]
+  fixtures.fn.mockImplementation(async () => { fixtures.projects = [] })
+  render(<App />)
+  await act(async () => {})
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' })))
+  expect(fixtures.fn).toHaveBeenCalled()
+  expect(await screen.findByRole('heading', { name: 'Create your first project' })).toBeInTheDocument()
+  fixtures.fn.mockReset()
 })
 
 it.each([true, false])('routes the sidebar create action by plan (plan required=%s)', async (planRequired) => {

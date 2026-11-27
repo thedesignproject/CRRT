@@ -8,8 +8,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ellipsis } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@crrt/ui/components/dropdown-menu'
 import { InboxMoveUndo } from './components/InboxMoveUndo'
-import type { InboxUndoItem } from './api'
-import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
+import type { InboxUndoItem, RuleDecision } from './api'
+import { useAgentRuns, useNextSteps } from './hooks/useProjectData'
+import { acceptInvite as apiAcceptInvite, answerNextStepConflict, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useStorybookConnected } from './hooks/useStorybookConnected'
 import { useComments } from './hooks/useComments'
@@ -20,7 +21,7 @@ import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath, route } from './lib/routes'
 import { billingPlanSelection } from './lib/access-review-link'
-import { AGENTS, PROMPT_AGENT_ID, agentActionLabel, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
+import { AGENTS, PROMPT_AGENT_ID, agentActionLabel, agentNoun, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { BillingPage } from './components/BillingPage'
 import { UserMenu } from './components/UserMenu'
 import { TrialOffer } from './components/TrialOffer'
@@ -264,12 +265,21 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     agentView !== null,
     user.id,
   )
-  const directDelivery = useDirectDelivery(API_BASE, accessToken, agentProject, agentView === 'next-steps')
+  // Reloading as sends move along keeps the feedback list and "Send N" in step with the terminal.
+  const directDelivery = useDirectDelivery(API_BASE, accessToken, agentProject, agentView === 'next-steps', refreshCommentsInBackground)
   const activeAgentShare = agentShareState
     && agentShareState.share.id === agentSession?.shareId
     && agentShareState.project.publicKey === selectedProject
     ? agentShareState : null
   const agentConnected = (activeAgentShare?.presence?.length ?? 0) > 0
+  // Changes each time a connected agent checks in, so steps and runs follow the existing session poll.
+  const agentActivity = activeAgentShare?.presence.map((p) => p.lastSeenAt).join() ?? ''
+  const nextSteps = useNextSteps(API_BASE, accessToken, agentView === 'next-steps' ? selectedProject : null, `${readyAgentCommentIds.join()}|${agentActivity}`)
+  const agentRuns = useAgentRuns(API_BASE, accessToken, agentView === 'agent-runs' ? selectedProject : null, agentActivity)
+  const answerConflict = useCallback(async (stepId: string, decision: RuleDecision) => {
+    await answerNextStepConflict(API_BASE, accessToken, stepId, decision)
+    nextSteps.reload()
+  }, [accessToken, nextSteps.reload])
   const agentQueueComments = (activeAgentShare?.comments ?? []).map(mapServerComment)
     .filter((comment) => comment.visibility === 'shared')
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
@@ -955,7 +965,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) : view === 'recordings' ? (
         <RecordingsPage apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'brain' ? (
-        <BrainPage />
+        <BrainPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
       ) : agentView === 'next-steps' ? (
         <NextStepsPage
           projectName={activeProject!.name}
@@ -969,11 +979,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onOpenComment={openComment}
           onOpenRuns={() => setView('agent-runs')}
           direct={directDelivery}
+          nextSteps={{ steps: nextSteps.data, error: nextSteps.error, onAnswer: answerConflict }}
         />
       ) : agentView === 'agent-runs' ? (
         <AgentRunsPage
           projectName={activeProject!.name}
-          agentName={selectedAgentMeta.name}
+          agentName={agentNoun(selectedAgentMeta, true)}
           connected={agentConnected}
           queue={agentQueueComments}
           events={agentEvents}
@@ -985,6 +996,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onRetry={retryAgentSession}
           onOpenComment={openComment}
           onOpenNextSteps={() => setView('next-steps')}
+          pastRuns={{ runs: agentRuns.data, error: agentRuns.error }}
         />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
@@ -998,6 +1010,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onBack={() => { setConnectStorybook(false); setView('feedback') }}
           onProjectsChanged={refreshProjects}
           connectStorybook={connectStorybook}
+          // Refresh first so the auto-select never picks the deleted project; no projects left opens onboarding.
+          onDeleted={async () => { await refreshProjects(); setSelectedCommentId(''); selectProject('') }}
         />
       ) : (
       <>

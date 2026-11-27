@@ -1,7 +1,7 @@
 import posthog from '../../posthog'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
-import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
+import { getExternalWorkDraft, getProjectTrackers, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
 import { timeAgo, truncateUrl } from '../lib/format'
 import { asset } from '../lib/routes'
 import { classifyExternalWorkFailure, externalWorkFailureMessage } from '../lib/external-work-errors'
@@ -29,6 +29,7 @@ import {
 } from '@crrt/ui/components/dropdown-menu'
 import { Ellipsis, MousePointer2 } from 'lucide-react'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
+import { mocksEnabled } from '../lib/mocks'
 
 const providerLabel = (provider: ExternalWorkProvider) =>
   provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'
@@ -211,6 +212,16 @@ export function CommentDetail({
   const [createdExternalWork, setCreatedExternalWork] = useState<Record<string, ExternalWorkRecord[]>>({})
   const [pendingRecovery, setPendingRecovery] = useState(false)
   const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
+  // Null until known (or when the check fails): the menu then offers every tracker and the send flow explains.
+  const [trackers, setTrackers] = useState<Record<ExternalWorkProvider, { connected: boolean }> | null>(null)
+  useEffect(() => {
+    setTrackers(null)
+    // The mock preview has no integrations API; unknown keeps the menu offering every tracker.
+    if (readOnly || !selectedProject || mocksEnabled) return
+    let current = true
+    getProjectTrackers(apiBase, accessToken, selectedProject).then((next) => { if (current) setTrackers(next) }, () => {})
+    return () => { current = false }
+  }, [apiBase, accessToken, selectedProject, readOnly])
   const issueRequests = useRef(new Map<string, symbol>())
   const syncRequests = useRef(new Set<string>())
   const selectedId = selectedComment?.id ?? null
@@ -282,7 +293,7 @@ export function CommentDetail({
     setIssueRecovery(null)
     try {
       const prepared = await getExternalWorkDraft(apiBase, accessToken, commentId, provider)
-      if (!prepared.connected) throw new Error(`${provider}_not_connected`)
+      if (!prepared.connected) throw new Error(`${provider}_${prepared.reason ?? 'not_connected'}`)
       if (prepared.existing) {
         const remembered = externalWorkRecord(provider, prepared.existing)
         if (!remembered) throw new Error('missing_external_work_identity')
@@ -296,7 +307,7 @@ export function CommentDetail({
         const failure = classifyExternalWorkFailure(error)
         setIssueError(externalWorkFailureMessage(failure, providerLabel(provider), Boolean(onOpenIntegrations)))
         if (failure === 'unavailable') setIssueRecovery({ kind: 'retry', provider })
-        else if (failure === 'not_connected' && onOpenIntegrations) setIssueRecovery({ kind: 'connect', provider })
+        else if ((failure === 'not_connected' || failure === 'revoked') && onOpenIntegrations) setIssueRecovery({ kind: 'connect', provider })
       }
     } finally {
       issueRequests.current.delete(commentId)
@@ -437,7 +448,20 @@ export function CommentDetail({
                     <DropdownMenuLabel>
                       {selectedComment.reviewStatus === 'rejected' ? 'Send to · reopen to send' : 'Send to'}
                     </DropdownMenuLabel>
-                    {(['github', 'linear', 'jira'] as const).map(provider => (
+                    {(['github', 'linear', 'jira'] as const).map(provider => trackers?.[provider].connected === false ? (
+                      onOpenIntegrations ? (
+                        <DropdownMenuItem key={provider} onClick={onOpenIntegrations}>
+                          <ExternalLinkIcon size={13} /> Connect {providerLabel(provider)}
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem key={provider} disabled>
+                          <span className="flex flex-col">
+                            <span>{providerLabel(provider)}</span>
+                            <span className="text-xs text-text-subtle">Not connected. Ask a project manager.</span>
+                          </span>
+                        </DropdownMenuItem>
+                      )
+                    ) : (
                       <DropdownMenuItem
                         key={provider}
                         aria-label={`Send to ${providerLabel(provider)}`}

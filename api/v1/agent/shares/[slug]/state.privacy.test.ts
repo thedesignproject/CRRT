@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../../../../_lib/shares.js', () => ({ requireAgentShare: vi.fn() }))
-vi.mock('../../../../_lib/store.js', () => ({ getProject: vi.fn(), getRepoConfig: vi.fn(), listCommentsForShare: vi.fn(), getLatestShareRevision: vi.fn(), listLivePresence: vi.fn() }))
+vi.mock('../../../../_lib/store.js', () => ({ getProject: vi.fn(), getRepoConfig: vi.fn(), listCommentsForShare: vi.fn(), getLatestShareRevision: vi.fn(), listLivePresence: vi.fn(), AGENT_LIVE_MS: 90_000 }))
 import { requireAgentShare } from '../../../../_lib/shares.js'
 import { getProject, getRepoConfig, listCommentsForShare, getLatestShareRevision, listLivePresence } from '../../../../_lib/store.js'
 import handler from './state.js'

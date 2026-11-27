@@ -306,6 +306,19 @@ export async function createInstallationAccessToken(installationId: string) {
   return body.token
 }
 
+// False when GitHub no longer has the installation (404: uninstalled or revoked)
+// or it is suspended. Network and other GitHub errors throw instead.
+export async function isGitHubInstallationActive(installationId: string) {
+  const response = await fetchGitHub(
+    `https://api.github.com/app/installations/${encodeURIComponent(installationId)}`,
+    { headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${createGitHubAppJwt()}` } },
+    'github_installation_lookup_failed',
+  )
+  if (response.status === 404) return false
+  if (!response.ok) throw new Error('github_installation_lookup_failed')
+  return !(await githubJson(response, 'github_installation_lookup_failed')).suspended_at
+}
+
 export async function assertGitHubInstallationRepoAccess(
   installationId: string,
   owner: string,

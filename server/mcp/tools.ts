@@ -4,4 +4,7 @@ import { actionTools } from './actions.js'
 import { dashboardTools } from './dashboard.js'
 import { dashboardAccessTools } from './dashboard-access.js'
 import { documentTools } from './documents.js'
-export const tools = [...discoveryTools, ...contextTools, ...actionTools, ...dashboardAccessTools, ...dashboardTools, ...documentTools]
+import { ruleTools } from './rules.js'
+import { nextStepTools } from './next-steps.js'
+import { listenerTools } from './listeners.js'
+export const tools = [...discoveryTools, ...ruleTools, ...nextStepTools, ...contextTools, ...actionTools, ...dashboardAccessTools, ...dashboardTools, ...documentTools, ...listenerTools]

@@ -10,6 +10,9 @@ export interface Project {
   updatedAt: string
   role?: ProjectMemberRole
   capabilities?: ProjectCapability[]
+  /** Open feedback, and whether an agent is working there now. */
+  openCount?: number
+  agentLive?: boolean
 }
 
 export type ProjectCapability = 'feedback:read' | 'feedback:create' | 'feedback:manage' | 'agent:operate' | 'integrations:send' | 'project:manage'
@@ -80,6 +83,8 @@ export interface ExternalWorkRecord {
 export interface ExternalWorkDraft {
   provider: ExternalWorkProvider
   connected: boolean
+  /** Set when GitHub says the app installation is gone; connected is then false. */
+  reason?: 'installation_revoked'
   destination: string | null
   existing: (GitHubIssueRecord & { externalUrl?: string }) | { externalId: string; externalKey: string; externalUrl: string; createdAt: string } | null
   draft: { title: string; body: string }
@@ -756,6 +761,12 @@ export function renameProject(apiBase: string, accessToken: string, projectKey: 
   })
 }
 
+// Owner only: deletes the project and its feedback, members, invites, shares and integrations.
+export async function deleteProject(apiBase: string, accessToken: string, projectKey: string) {
+  const response = await fetch(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, { method: 'DELETE', headers: authHeaders(accessToken) })
+  if (!response.ok) throw responseError(await response.text(), response.status)
+}
+
 // Replace the project's domain allowlist. An empty array disables the
 // restriction (comments accepted from any origin).
 export function updateProjectAllowedOrigins(apiBase: string, accessToken: string, projectKey: string, allowedOrigins: string[]) {
@@ -946,6 +957,14 @@ export function bulkDeleteExtensionComments(
 export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider = 'github') {
   return requestJson<ExternalWorkDraft>(
     `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`,
+    { headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+/** Which trackers have a destination, so the tracker menu can offer to connect the others. */
+export function getProjectTrackers(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<Record<ExternalWorkProvider, { connected: boolean }>>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations`,
     { headers: { ...authHeaders(accessToken) } },
   )
 }
@@ -1191,16 +1210,13 @@ export interface AgentListener {
   label: string
   repoUrl: string
   online: boolean
-  stopped: boolean
 }
 
 /** One comment sent straight to a listening terminal. */
 export interface AgentDispatch {
   dispatchId: string
   commentId: string
-  listenerId: string
   state: string
-  reason: string | null
 }
 
 export interface AgentDelivery {
@@ -1208,17 +1224,11 @@ export interface AgentDelivery {
   dispatches: AgentDispatch[]
 }
 
-function agentDispatchUrl(apiBase: string, projectKey: string) {
-  return `${apiBase.replace(/\/$/, '')}/v1/projects/${encodeURIComponent(projectKey)}/agent/dispatch`
-}
-
-export async function getAgentDelivery(apiBase: string, accessToken: string, projectKey: string): Promise<AgentDelivery> {
-  const result = await requestJson<AgentDelivery>(agentDispatchUrl(apiBase, projectKey), {
+export function getAgentDelivery(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<AgentDelivery>(`${apiBase.replace(/\/$/, '')}/v1/projects/${encodeURIComponent(projectKey)}/agent/dispatch`, {
     cache: 'no-store',
     headers: { ...authHeaders(accessToken) },
   })
-  if (!Array.isArray(result?.listeners) || !Array.isArray(result?.dispatches)) throw new Error('Invalid delivery state')
-  return result
 }
 
 export function sendAgentDispatch(apiBase: string, accessToken: string, projectKey: string, input: {
@@ -1227,9 +1237,102 @@ export function sendAgentDispatch(apiBase: string, accessToken: string, projectK
   expectedUpdatedAt: string
   idempotencyKey: string
 }) {
-  return requestJson<{ dispatchId: string; state: string }>(agentDispatchUrl(apiBase, projectKey), {
+  return requestJson<{ dispatchId: string; state: string }>(`${apiBase.replace(/\/$/, '')}/v1/projects/${encodeURIComponent(projectKey)}/agent/dispatch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
     body: JSON.stringify(input),
   })
+}
+
+export function getWorkspace(apiBase: string, accessToken: string) {
+  return requestJson<{ name: string | null }>(`${apiBase}/v1/workspace`, { headers: authHeaders(accessToken) })
+}
+
+export function renameWorkspace(apiBase: string, accessToken: string, name: string) {
+  return requestJson<{ name: string }>(`${apiBase}/v1/workspace`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ name }),
+  })
+}
+
+/** A Brain rule: workspace-wide when projectKey is null. `citations` counts next steps that followed it. */
+export interface BrainRule {
+  id: string
+  title: string
+  body: string
+  projectKey: string | null
+  createdAt: string
+  updatedAt: string
+  /** True for your own workspace's rules; other owners' workspace rules are read-only here. */
+  mine: boolean
+  citations: number
+}
+
+export async function listRules(apiBase: string, accessToken: string) {
+  return (await requestJson<{ rules: BrainRule[] }>(`${apiBase}/v1/rules`, { headers: authHeaders(accessToken) })).rules
+}
+
+export async function createRule(apiBase: string, accessToken: string, input: { title: string; body: string; projectKey: string | null }) {
+  return (await requestJson<{ rule: BrainRule }>(`${apiBase}/v1/rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(input),
+  })).rule
+}
+
+export async function updateRule(apiBase: string, accessToken: string, ruleId: string, patch: { title: string; body: string }) {
+  return (await requestJson<{ rule: BrainRule }>(`${apiBase}/v1/rules/${encodeURIComponent(ruleId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(patch),
+  })).rule
+}
+
+export async function deleteRule(apiBase: string, accessToken: string, ruleId: string) {
+  const response = await fetch(`${apiBase}/v1/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE', headers: authHeaders(accessToken) })
+  if (!response.ok) throw responseError(await response.text(), response.status)
+}
+
+export type RuleDecision = 'keep_rule' | 'update_rule'
+
+/** Ready comments grouped by page and element. A paused step waits for the user to answer a rule conflict. */
+export interface NextStepRecord {
+  id: string
+  title: string
+  tag: string
+  status: 'open' | 'paused'
+  createdAt: string
+  comments: Array<{ id: string; body: string; authorName: string | null }>
+  requesters: string[]
+  citations: Array<{ ruleId: string; title: string }>
+  conflict: { ruleId: string | null; ruleTitle: string | null; question: string; decision: RuleDecision | null } | null
+}
+
+export async function listNextSteps(apiBase: string, accessToken: string, projectKey: string) {
+  return (await requestJson<{ steps: NextStepRecord[] }>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/next-steps`, { headers: authHeaders(accessToken) })).steps
+}
+
+export async function answerNextStepConflict(apiBase: string, accessToken: string, stepId: string, decision: RuleDecision) {
+  return (await requestJson<{ step: NextStepRecord }>(`${apiBase}/v1/next-steps/${encodeURIComponent(stepId)}/conflict`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ decision }),
+  })).step
+}
+
+export interface AgentRun {
+  id: string
+  projectKey: string
+  agentLabel: string
+  startedAt: string
+  endedAt: string
+  steps: number
+  commentsCompleted: number
+  outcome: 'running' | 'completed' | 'blocked' | 'stopped'
+}
+
+/** The project's 20 most recent runs, newest first. */
+export async function listAgentRuns(apiBase: string, accessToken: string, projectKey: string) {
+  return (await requestJson<{ runs: AgentRun[] }>(`${apiBase}/v1/agent-runs?project=${encodeURIComponent(projectKey)}&limit=20`, { headers: authHeaders(accessToken) })).runs
 }

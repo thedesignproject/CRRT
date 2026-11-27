@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../_lib/auth.js'
 import { handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
+import { projectCapabilities } from '../../_lib/project-capabilities.js'
 import { claimProject } from '../../_lib/store.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -19,7 +20,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const project = await claimProject(user.userId, projectKey, name)
     setCors(req, res, ['POST', 'OPTIONS'])
-    return res.status(200).json(project)
+    // Whoever claims a project owns it, so the access matches GET /v1/projects.
+    return res.status(200).json({ ...project, role: 'owner', capabilities: projectCapabilities('owner') })
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
     if (msg === 'not_found') return jsonError(req, res, 404, 'Project not found', error)

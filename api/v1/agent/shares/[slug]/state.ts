@@ -1,7 +1,7 @@
 import { hashToken } from '../../../../_lib/tokens.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
-import { getLatestShareRevision, getProject, getRepoConfig, listCommentsForShare, listLivePresence } from '../../../../_lib/store.js'
+import { AGENT_LIVE_MS, getLatestShareRevision, getProject, getRepoConfig, listCommentsForShare, listLivePresence } from '../../../../_lib/store.js'
 import { requireAgentShare } from '../../../../_lib/shares.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const repoConfig = await getRepoConfig(project.publicKey)
     const revision = await getLatestShareRevision(authorized.share.id)
-    const cutoff = new Date(Date.now() - 90_000).toISOString()
+    const cutoff = new Date(Date.now() - AGENT_LIVE_MS).toISOString()
     const presence = await listLivePresence(authorized.share.id, cutoff)
     const comments = await listCommentsForShare(authorized.share, hashToken(authorized.token))
 

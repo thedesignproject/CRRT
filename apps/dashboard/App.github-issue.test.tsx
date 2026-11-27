@@ -30,6 +30,12 @@ const fixtures = vi.hoisted(() => ({
   agentSession: null as null | { shareId: string },
   agentShareState: null as null | Record<string, any>,
   updateVisibility: vi.fn(),
+  answerConflict: vi.fn(),
+  nextSteps: vi.fn(),
+  reloadSteps: vi.fn(),
+  agentRuns: vi.fn(),
+  directDelivery: vi.fn(),
+  refreshCommentsInBackground: vi.fn(),
   fn: vi.fn(),
   superadmin: false,
   signedIn: true,
@@ -46,6 +52,11 @@ vi.mock('./api', () => ({
   createShare: fixtures.createShare,
   getPrompt: fixtures.getPrompt,
   beginBillingCheckout: fixtures.beginCheckout,
+  answerNextStepConflict: fixtures.answerConflict,
+}))
+vi.mock('./hooks/useProjectData', () => ({
+  useNextSteps: (...args: unknown[]) => { fixtures.nextSteps(...args); return { data: null, error: null, reload: fixtures.reloadSteps } },
+  useAgentRuns: (...args: unknown[]) => { fixtures.agentRuns(...args); return { data: [], error: null, reload: vi.fn() } },
 }))
 
 vi.mock('./hooks/useAuth', () => ({
@@ -74,8 +85,10 @@ vi.mock('./hooks/useComments', () => ({
     loading: false,
     error: null,
     refresh: fixtures.fn,
+    refreshInBackground: fixtures.refreshCommentsInBackground,
   }),
 }))
+vi.mock('./hooks/useDirectDelivery', () => ({ useDirectDelivery: fixtures.directDelivery }))
 vi.mock('./hooks/useAgentSession', () => ({
   useAgentSession: (_apiBase: string, _accessToken: string, project: string | null, ids: string[], enabled: boolean) => {
     fixtures.agentEnabled(enabled)
@@ -128,8 +141,8 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
 }))
-vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { comments: Array<{ id: string }>; handoff: { onCopySessionLink: () => void; setSelectedAgent: (id: string) => void; selectedAgentMeta: { name: string } }; onOpenComment: (id: string) => void; onOpenRuns: () => void }) => <section data-testid="next-steps"><span data-testid="next-step-ids">{props.comments.map((c) => c.id).join(',')}</span><span data-testid="agent-name">{props.handoff.selectedAgentMeta.name}</span><button onClick={() => props.handoff.setSelectedAgent('codex')}>pick codex</button><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
-vi.mock('./components/AgentRunsPage', () => ({ AgentRunsPage: (props: { queue: Array<{id:string;implementationStatus:string}>; connected: boolean; notice?: string; onOpenNextSteps: () => void }) => <section data-testid="agent-runs"><span data-testid="agent-queue">{props.connected ? props.queue.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span>{props.notice && <p role="status">{props.notice}</p>}<button onClick={props.onOpenNextSteps}>go to next steps</button></section> }))
+vi.mock('./components/NextStepsPage', () => ({ NextStepsPage: (props: { comments: Array<{ id: string }>; handoff: { onCopySessionLink: () => void; setSelectedAgent: (id: string) => void; selectedAgentMeta: { name: string } }; onOpenComment: (id: string) => void; onOpenRuns: () => void; nextSteps: { onAnswer: (id: string, decision: string) => Promise<unknown> } }) => <section data-testid="next-steps"><button onClick={() => { void props.nextSteps.onAnswer('step-1', 'keep_rule') }}>keep rule</button><span data-testid="next-step-ids">{props.comments.map((c) => c.id).join(',')}</span><span data-testid="agent-name">{props.handoff.selectedAgentMeta.name}</span><button onClick={() => props.handoff.setSelectedAgent('codex')}>pick codex</button><button onClick={props.handoff.onCopySessionLink}>copy session prompt</button><button onClick={() => props.onOpenComment('comment-1')}>open next step</button><button onClick={props.onOpenRuns}>see run</button></section> }))
+vi.mock('./components/AgentRunsPage', () => ({ AgentRunsPage: (props: { agentName: string; queue: Array<{id:string;implementationStatus:string}>; connected: boolean; notice?: string; onOpenNextSteps: () => void }) => <section data-testid="agent-runs"><span data-testid="runs-agent-name">{props.agentName}</span><span data-testid="agent-queue">{props.connected ? props.queue.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span>{props.notice && <p role="status">{props.notice}</p>}<button onClick={props.onOpenNextSteps}>go to next steps</button></section> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
@@ -174,6 +187,8 @@ beforeEach(() => {
   fixtures.beginCheckout.mockReset().mockResolvedValue({ url: 'https://checkout.example/session' })
   fixtures.capture.mockReset()
   fixtures.fn.mockReset()
+  fixtures.directDelivery.mockReset().mockReturnValue({})
+  fixtures.refreshCommentsInBackground.mockReset()
   fixtures.agentSession = null
   fixtures.agentShareState = null
   fixtures.agentProject.mockReset()
@@ -1258,6 +1273,24 @@ it('renders only active handoff feedback and its live progress, excluding unsele
  expect(screen.getByTestId('agent-queue')).toHaveTextContent('selected-1:done')
  expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('selected-2')
 })
+it('loads next steps and past runs only on their pages, refreshing as the agent checks in, and answers rule conflicts', async () => {
+ fixtures.comments = [readyFeedback('ready-1')]
+ fixtures.agentSession = {shareId:'active-share'}
+ fixtures.agentShareState = {share:{id:'active-share'},project:{publicKey:'project-1'},presence:[{agentId:'local',lastSeenAt:'t1'}],comments:[]}
+ fixtures.answerConflict.mockReset().mockResolvedValue({})
+ fixtures.reloadSteps.mockReset()
+ render(<App />)
+ const anything = expect.anything()
+ fireEvent.click(await screen.findByRole('button',{name:/^nav next steps/}))
+ expect(fixtures.nextSteps).toHaveBeenLastCalledWith(anything, anything, 'project-1', 'ready-1|t1')
+ expect(fixtures.agentRuns).toHaveBeenLastCalledWith(anything, anything, null, 't1')
+ fireEvent.click(screen.getByRole('button',{name:'keep rule'}))
+ await waitFor(() => expect(fixtures.reloadSteps).toHaveBeenCalledOnce())
+ expect(fixtures.answerConflict).toHaveBeenCalledWith(anything, anything, 'step-1', 'keep_rule')
+ fireEvent.click(screen.getByRole('button',{name:'nav agent runs live'}))
+ expect(fixtures.agentRuns).toHaveBeenLastCalledWith(anything, anything, 'project-1', 't1')
+ expect(fixtures.nextSteps).toHaveBeenLastCalledWith(anything, anything, null, 'ready-1|t1')
+})
 it.each(['loading','missing session','stale share','wrong project','empty state'])('does not show a queue from %s',async(context)=>{
  fixtures.comments=[readyFeedback('comment-1')]
  fixtures.agentSession=context==='missing session'?null:{shareId:'active-share'}
@@ -1765,13 +1798,30 @@ it('hands the selected ready feedback to Agents, or everything ready without a s
  expect(screen.getByTestId('next-step-ids')).toHaveTextContent(/^comment-1$/)
 })
 
+it('reloads comments in the background as direct sends move along', async () => {
+ fixtures.comments = [readyFeedback('comment-1')]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: /nav next steps/ }))
+ expect(fixtures.directDelivery).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), 'project-1', true, expect.any(Function))
+ expect(fixtures.refreshCommentsInBackground).not.toHaveBeenCalled()
+ const onProgress = fixtures.directDelivery.mock.lastCall![4] as () => void
+ onProgress()
+ expect(fixtures.refreshCommentsInBackground).toHaveBeenCalledOnce()
+})
+
 it('defaults Agent handoff to a plain prompt and remembers the chosen tool', async () => {
  fixtures.comments = [readyFeedback('comment-1')]
  const view = render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: /nav next steps/ }))
  expect(screen.getByTestId('agent-name')).toHaveTextContent('Copy as prompt')
+ fireEvent.click(screen.getByRole('button', { name: 'see run' }))
+ expect(screen.getByTestId('runs-agent-name')).toHaveTextContent(/^Your agent$/)
+ fireEvent.click(screen.getByRole('button', { name: 'go to next steps' }))
  fireEvent.click(screen.getByRole('button', { name: 'pick codex' }))
  expect(screen.getByTestId('agent-name')).toHaveTextContent('Codex')
+ fireEvent.click(screen.getByRole('button', { name: 'see run' }))
+ expect(screen.getByTestId('runs-agent-name')).toHaveTextContent(/^Codex$/)
+ fireEvent.click(screen.getByRole('button', { name: 'go to next steps' }))
  expect(window.localStorage.setItem).toHaveBeenCalledWith('crrt-dashboard-agent', 'codex')
  view.unmount()
 

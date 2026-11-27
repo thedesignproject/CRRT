@@ -15,8 +15,10 @@ vi.mock('../../../_lib/store.js', () => ({
   releaseCommentExternalWork: vi.fn(),
 }))
 vi.mock('./github-issue.js', () => ({ default: vi.fn() }))
+vi.mock('../../../_lib/github-app.js', () => ({ isGitHubInstallationActive: vi.fn() }))
 
 import handler from './external-work.js'
+import { isGitHubInstallationActive } from '../../../_lib/github-app.js'
 import { waitUntil } from '@vercel/functions'
 import githubIssueHandler from './github-issue.js'
 import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
@@ -46,6 +48,7 @@ beforeEach(() => {
   vi.mocked(getComment).mockResolvedValue(comment as never)
   vi.mocked(getCommentForGithubIssue).mockResolvedValue(comment as never)
   vi.mocked(getGithubIssueConnection).mockResolvedValue({ owner: 'acme', repo: 'store', installationId: 1, connectionVersion: 'v' } as never)
+  vi.mocked(isGitHubInstallationActive).mockResolvedValue(true)
   vi.mocked(getCommentExternalWork).mockResolvedValue(null)
   vi.mocked(getProjectIntegration).mockImplementation(async (_project, provider) => ({
     id: 'integration', containerId: provider === 'jira' ? '100' : 'team',
@@ -72,6 +75,22 @@ describe('external work endpoint', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ provider: 'github', connected: true, destination: 'acme/store', draft: { title: expect.stringContaining('Move the CTA'), body: expect.stringContaining('Move the CTA') } })
     expect(JSON.stringify(res.body)).not.toContain('installationId')
+    expect(res.body).not.toHaveProperty('reason')
+    expect(isGitHubInstallationActive).toHaveBeenCalledWith(1)
+  })
+
+  it('reports a revoked GitHub installation but keeps the connection when GitHub cannot be reached', async () => {
+    vi.mocked(isGitHubInstallationActive).mockResolvedValueOnce(false)
+    let res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toMatchObject({ provider: 'github', connected: false, reason: 'installation_revoked' })
+
+    vi.mocked(isGitHubInstallationActive).mockRejectedValueOnce(new Error('github_installation_lookup_failed'))
+    res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.body).toMatchObject({ provider: 'github', connected: true })
+    expect(res.body).not.toHaveProperty('reason')
   })
 
   it('dispatches sends through the provider adapter and rejects unsupported providers', async () => {
@@ -134,6 +153,7 @@ describe('external work endpoint', () => {
     let res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
     expect(res.body).toMatchObject({ connected: false, destination: null, existing })
+    expect(isGitHubInstallationActive).not.toHaveBeenCalled()
 
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(getComment).mockRejectedValueOnce(new Error('database secret'))
@@ -322,11 +342,13 @@ it.each(['github','linear','jira'])('denies a %s draft after access is revoked d
   const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
   expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('draft')
   expect(getCommentForGithubIssue).toHaveBeenCalledWith('p','c','u')
+  expect(isGitHubInstallationActive).not.toHaveBeenCalled()
 })
 it.each(['github','linear'])('returns 404 if the %s draft comment disappears during metadata lookup',async provider=>{
   vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockResolvedValueOnce(null)
   const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
   expect(res.statusCode).toBe(404)
+  expect(isGitHubInstallationActive).not.toHaveBeenCalled()
 })
 
 it.each(['linear','jira'])('denies existing %s issue links and acceptance after authorization is revoked',async provider=>{

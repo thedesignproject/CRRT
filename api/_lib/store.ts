@@ -503,6 +503,179 @@ export async function listProjectsForUser(userId: string, options: { after?: str
   }))
 }
 
+// An agent counts as live when its presence was seen within this window.
+export const AGENT_LIVE_MS = 90_000
+
+// Open count and live-agent flag for every project whose feedback the user may read.
+export async function listProjectActivity(userId: string) {
+  const { data, error } = await getSupabase().rpc('project_activity', {
+    p_actor: userId,
+    p_live_since: new Date(Date.now() - AGENT_LIVE_MS).toISOString(),
+  } as never)
+  if (error) throw new Error(error.message)
+  const rows = data as Array<{ project_key: string; open_count: number; agent_live: boolean }>
+  return new Map(rows.map((row) => [row.project_key, { openCount: row.open_count, agentLive: row.agent_live }]))
+}
+
+type AgentRunRow = {
+  share_id: string; project_key: string; agent_id: string; started_at: string; ended_at: string
+  steps: number; comments_completed: number; outcome: 'running' | 'completed' | 'blocked' | 'stopped'
+}
+
+// Past and live agent runs (one per agent per share) in the given projects, newest first.
+export async function listAgentRuns(projectKeys: string[], limit: number) {
+  const { data, error } = await getSupabase().rpc('agent_runs', {
+    p_projects: projectKeys,
+    p_live_since: new Date(Date.now() - AGENT_LIVE_MS).toISOString(),
+    p_limit: limit,
+  } as never)
+  if (error) throw new Error(error.message)
+  return (data as AgentRunRow[]).map((row) => ({
+    id: `${row.share_id}:${row.agent_id}`,
+    projectKey: row.project_key,
+    // MCP agents are stored as mcp:{workId}:{agentId}; show the agent's own id.
+    agentLabel: row.agent_id.replace(/^mcp:[^:]*:/, ''),
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    steps: row.steps,
+    commentsCompleted: row.comments_completed,
+    outcome: row.outcome,
+  }))
+}
+
+export async function getWorkspaceName(userId: string) {
+  const { data, error } = await getSupabase().from('workspaces').select('name').eq('user_id', userId).maybeSingle()
+  if (error) throw new Error(error.message)
+  return (data as { name: string } | null)?.name ?? null
+}
+
+export async function setWorkspaceName(userId: string, name: string) {
+  const { error } = await getSupabase().from('workspaces')
+    .upsert({ user_id: userId, name, updated_at: new Date().toISOString() })
+  if (error) throw new Error(error.message)
+}
+
+type BrainRuleRow = { id: string; project_key: string | null; title: string; body: string; author_user_id: string | null; created_at: string; updated_at: string }
+const RULE_COLUMNS = 'id, project_key, title, body, author_user_id, created_at, updated_at'
+const toBrainRule = (row: BrainRuleRow) => ({
+  id: row.id, title: row.title, body: row.body, projectKey: row.project_key,
+  authorUserId: row.author_user_id, createdAt: row.created_at, updatedAt: row.updated_at,
+})
+
+// Rules applying to projects whose feedback the actor may read; narrowed to one project or one rule.
+export async function listBrainRulesFor(actorUserId: string, projectKey: string | null, ruleId?: string) {
+  let query = getSupabase().rpc('brain_rules_for', { p_actor: actorUserId, p_project_key: projectKey } as never).select(RULE_COLUMNS)
+  if (ruleId) query = query.eq('id', ruleId)
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data as unknown as BrainRuleRow[]).map(toBrainRule)
+}
+
+// The user's own workspace rules, then the rules of projects whose feedback they may read,
+// each with how many next steps an agent completed following it.
+export async function listRulesForUser(userId: string) {
+  const [own, applying] = await Promise.all([
+    getSupabase().from('brain_rules').select(RULE_COLUMNS).eq('owner_user_id', userId).is('project_key', null).order('created_at'),
+    listBrainRulesFor(userId, null),
+  ])
+  if (own.error) throw new Error(own.error.message)
+  const ownRules = (own.data as BrainRuleRow[]).map(toBrainRule)
+  const mine = new Set(ownRules.map((rule) => rule.id))
+  // Everything your projects' agents follow, other owners' workspace rules included; `mine` marks your own workspace's.
+  const rules = [...ownRules, ...applying.filter((rule) => !mine.has(rule.id))]
+  const cited = await getSupabase().from('next_step_rule_citations').select('rule_id').in('rule_id', rules.map((rule) => rule.id))
+  if (cited.error) throw new Error(cited.error.message)
+  const counts = new Map<string, number>()
+  for (const { rule_id } of cited.data as Array<{ rule_id: string }>) counts.set(rule_id, (counts.get(rule_id) ?? 0) + 1)
+  return rules.map((rule) => ({ ...rule, mine: mine.has(rule.id), citations: counts.get(rule.id) ?? 0 }))
+}
+
+export async function getBrainRuleScope(ruleId: string) {
+  const { data, error } = await getSupabase().from('brain_rules').select('owner_user_id, project_key').eq('id', ruleId).maybeSingle()
+  if (error) throw new Error(error.message)
+  const row = data as { owner_user_id: string; project_key: string | null } | null
+  return row && { ownerUserId: row.owner_user_id, projectKey: row.project_key }
+}
+
+// A project rule belongs to the project owner's workspace; a workspace rule to its author.
+export async function createBrainRule(authorUserId: string, projectKey: string | null, title: string, body: string) {
+  let ownerUserId = authorUserId
+  if (projectKey) {
+    const owner = await getSupabase().from('project_members').select('user_id').eq('project_key', projectKey).eq('is_owner', true).single()
+    if (owner.error) throw new Error(owner.error.message)
+    ownerUserId = (owner.data as { user_id: string }).user_id
+  }
+  const { data, error } = await getSupabase().from('brain_rules')
+    .insert({ owner_user_id: ownerUserId, project_key: projectKey, title, body, author_user_id: authorUserId })
+    .select(RULE_COLUMNS).single()
+  if (error) throw new Error(error.message)
+  return toBrainRule(data as BrainRuleRow)
+}
+
+export async function updateBrainRule(ruleId: string, patch: { title?: string; body?: string }) {
+  const { data, error } = await getSupabase().from('brain_rules')
+    .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', ruleId).select(RULE_COLUMNS).single()
+  if (error) throw new Error(error.message)
+  return toBrainRule(data as BrainRuleRow)
+}
+
+export async function deleteBrainRule(ruleId: string) {
+  const { error } = await getSupabase().from('brain_rules').delete().eq('id', ruleId)
+  if (error) throw new Error(error.message)
+}
+
+export type NextStep = {
+  id: string; title: string; tag: string; status: 'open' | 'paused'; createdAt: string
+  comments: Array<{ id: string; body: string; authorName: string | null }>
+  requesters: string[]
+  citations: Array<{ ruleId: string; title: string }>
+  conflict: { ruleId: string | null; ruleTitle: string | null; question: string; decision: 'keep_rule' | 'update_rule' | null } | null
+}
+
+// Groups the project's Ready for Agent comments into next steps, then lists the open and paused ones.
+export async function listNextSteps(projectKey: string) {
+  const { data, error } = await getSupabase().rpc('sync_next_steps', { p_project: projectKey } as never)
+  if (error) throw new Error(error.message)
+  return data as NextStep[]
+}
+
+// A step's project and status, and its linked comments not yet in testing or done.
+export async function getNextStep(stepId: string) {
+  const { data, error } = await getSupabase().from('next_steps')
+    .select('project_key, status, next_step_comments(comment_id, comments(implementation_status))').eq('id', stepId).maybeSingle()
+  if (error) throw new Error(error.message)
+  const row = data as { project_key: string; status: string; next_step_comments: Array<{ comment_id: string; comments: { implementation_status: string | null } }> } | null
+  return row && {
+    projectKey: row.project_key, status: row.status,
+    incompleteCommentIds: row.next_step_comments.filter((link) => !['ready_for_testing', 'done'].includes(link.comments.implementation_status ?? '')).map((link) => link.comment_id),
+  }
+}
+
+// Pauses a step that is not done on a conflict with a rule; false when it is done or gone.
+export async function pauseNextStep(stepId: string, ruleId: string, question: string) {
+  const { data, error } = await getSupabase().from('next_steps')
+    .update({ status: 'paused', conflict_rule_id: ruleId, conflict_question: question, conflict_decision: null, updated_at: new Date().toISOString() })
+    .eq('id', stepId).neq('status', 'done').select('id').maybeSingle()
+  if (error) throw new Error(error.message)
+  return !!data
+}
+
+// Records the user's answer and reopens a paused step; false when it is no longer paused.
+export async function answerNextStepConflict(stepId: string, decision: 'keep_rule' | 'update_rule') {
+  const { data, error } = await getSupabase().from('next_steps')
+    .update({ status: 'open', conflict_decision: decision, updated_at: new Date().toISOString() })
+    .eq('id', stepId).eq('status', 'paused').select('id').maybeSingle()
+  if (error) throw new Error(error.message)
+  return !!data
+}
+
+export async function citeNextStepRules(stepId: string, ruleIds: string[], agentId: string) {
+  if (!ruleIds.length) return
+  const { error } = await getSupabase().from('next_step_rule_citations')
+    .upsert(ruleIds.map((ruleId) => ({ next_step_id: stepId, rule_id: ruleId, agent_id: agentId })), { onConflict: 'next_step_id,rule_id', ignoreDuplicates: true })
+  if (error) throw new Error(error.message)
+}
+
 export async function getProjectMember(
   userId: string,
   projectKey: string,
@@ -1111,6 +1284,13 @@ export async function updateProject(projectKey: string, patch: { name?: string; 
   const rows = data as ProjectRow[] | null
   if (!rows || rows.length === 0) return null
   return mapProject(rows[0])
+}
+
+/** Deletes a project its owner asked to delete, with its data (see delete_owned_project). */
+export async function deleteOwnedProject(projectKey: string, actorUserId: string) {
+  const { data, error } = await getSupabase().rpc('delete_owned_project', { p_project: projectKey, p_actor: actorUserId } as never)
+  if (error) throw new Error(error.message)
+  return data as 'deleted' | 'not_found' | 'forbidden'
 }
 
 export async function ensurePublicProject(publicKey: string) {

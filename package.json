@@ -67,7 +67,7 @@
     "cloud:configure": "bun scripts/configure-cloud-plans.ts",
     "appsumo:import": "bun scripts/import-appsumo-codes.ts",
     "cloud:check": "bun scripts/check-cloud-deployment.ts",
-    "test:mcp:local": "MCP_TEST_LOCAL=1 NODE_OPTIONS=--no-experimental-webstorage bun --env-file=.env.docker.local run test -- db/mcp-auth.integration.test.ts db/documents.integration.test.ts server/mcp/local.integration.test.ts server/mcp/actions.local.integration.test.ts server/mcp/documents.local.integration.test.ts",
+    "test:mcp:local": "MCP_TEST_LOCAL=1 NODE_OPTIONS=--no-experimental-webstorage bun --env-file=.env.docker.local run test -- db/mcp-auth.integration.test.ts db/documents.integration.test.ts db/studio-backend-migration.test.ts server/mcp/local.integration.test.ts server/mcp/actions.local.integration.test.ts server/mcp/documents.local.integration.test.ts",
     "test:visual": "bun scripts/chromatic/run.ts",
     "test:visual:types": "tsc -p tests/visual/tsconfig.json",
     "chromatic:local": "bun run test:visual && bun --env-file=.env.docker.local run chromatic",

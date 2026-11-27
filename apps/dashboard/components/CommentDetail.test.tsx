@@ -4,12 +4,17 @@ import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 
 vi.mock('../api', () => ({
   getExternalWorkDraft: vi.fn(),
+  // Pending by default: the menu offers every tracker until it knows which are connected.
+  getProjectTrackers: vi.fn(() => new Promise(() => {})),
   retryExternalWorkSync: vi.fn(),
   sendExternalWork: vi.fn(),
   resolvePendingExternalWork: vi.fn(),
 }))
 
-import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
+const mockMode = vi.hoisted(() => ({ on: false }))
+vi.mock('../lib/mocks', async (original) => ({ ...(await original<object>()), get mocksEnabled() { return mockMode.on } }))
+
+import { getExternalWorkDraft, getProjectTrackers, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'
 import { mapServerComment } from '../lib/comment'
 import type { Comment } from '../lib/types'
@@ -484,6 +489,64 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }))
     expect(onOpenIntegrations).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains a revoked GitHub installation and offers the same Connect action', async () => {
+    const onOpenIntegrations = vi.fn()
+    vi.mocked(getExternalWorkDraft)
+      .mockResolvedValueOnce({ provider: 'github', connected: false, reason: 'installation_revoked', destination: 'acme/site', existing: null, draft: { title: 'Title', body: 'Body' } })
+    render(<CommentDetail {...props} onOpenIntegrations={onOpenIntegrations} />)
+    await sendTo('GitHub')
+    expect(await screen.findByRole('alert')).toHaveTextContent('GitHub lost access to this project.')
+    fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }))
+    expect(onOpenIntegrations).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the tracker check in the mock preview, which has no integrations API', () => {
+    mockMode.on = true
+    try {
+      vi.mocked(getProjectTrackers).mockClear()
+      render(<CommentDetail {...props} />)
+      expect(getProjectTrackers).not.toHaveBeenCalled()
+    } finally { mockMode.on = false }
+  })
+
+  it('offers to connect unconnected trackers from the menu, before sending', async () => {
+    vi.mocked(getProjectTrackers).mockResolvedValueOnce({ github: { connected: true }, linear: { connected: false }, jira: { connected: false } })
+    const onOpenIntegrations = vi.fn()
+    render(<CommentDetail {...props} onOpenIntegrations={onOpenIntegrations} />)
+    expect(getProjectTrackers).toHaveBeenCalledWith('/api', 'session-token', 'project-1')
+    openMoreActions()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Connect Linear' }))
+    expect(onOpenIntegrations).toHaveBeenCalledTimes(1)
+    expect(getExternalWorkDraft).not.toHaveBeenCalled()
+    openMoreActions()
+    expect(await screen.findByRole('menuitem', { name: 'Connect Jira' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Send to GitHub' })).toBeInTheDocument()
+  })
+
+  it('explains unconnected trackers to people who cannot connect them', async () => {
+    vi.mocked(getProjectTrackers).mockResolvedValueOnce({ github: { connected: false }, linear: { connected: true }, jira: { connected: true } })
+    render(<CommentDetail {...props} />)
+    openMoreActions()
+    const item = await screen.findByRole('menuitem', { name: /GitHub\s*Not connected\. Ask a project manager\./ })
+    expect(item).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.queryByRole('menuitem', { name: 'Send to GitHub' })).toBeNull()
+  })
+
+  it('keeps every send item when the tracker check fails, skips it without a project, and ignores a stale answer', async () => {
+    vi.mocked(getProjectTrackers).mockRejectedValueOnce(new Error('offline'))
+    const { rerender } = render(<CommentDetail {...props} />)
+    expect(await sendToItem('Linear')).toBeInTheDocument()
+    let answer!: (value: Record<'github' | 'linear' | 'jira', { connected: boolean }>) => void
+    vi.mocked(getProjectTrackers).mockReturnValueOnce(new Promise((resolve) => { answer = resolve }))
+    rerender(<CommentDetail {...props} selectedProject="project-2" />)
+    rerender(<CommentDetail {...props} selectedProject="" />)
+    rerender(<CommentDetail {...props} readOnly />)
+    await act(async () => answer({ github: { connected: false }, linear: { connected: false }, jira: { connected: false } }))
+    expect(getProjectTrackers).toHaveBeenCalledTimes(2)
+    rerender(<CommentDetail {...props} />)
+    expect(await sendToItem('Jira')).toBeInTheDocument()
   })
 
   it('tells other people who can connect a disconnected tracker', async () => {

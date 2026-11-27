@@ -121,7 +121,7 @@ suite('real MCP client → HTTP → CRRT services → local Docker', () => {
   })
   it('initializes, discovers scoped feedback tools and dashboard upgrade entry points, and reads filtered projects and feedback', async () => {
     const client = await connect(), listed = await client.listTools()
-    expect(listed.tools.map(tool => tool.name).sort()).toEqual(['connection_status', 'get_feedback', 'get_handoff_context', 'list_feedback', 'list_projects', 'request_dashboard_access', ...dashboardOperations.filter(operation => !operation.superAdmin).map(operation => operation.tool)].sort())
+    expect(listed.tools.map(tool => tool.name).sort()).toEqual(['connection_status', 'get_feedback', 'get_handoff_context', 'get_rule', 'list_feedback', 'list_next_steps', 'list_projects', 'list_rules', 'request_dashboard_access', ...dashboardOperations.filter(operation => !operation.superAdmin).map(operation => operation.tool)].sort())
     expect(listed.tools.filter(tool => ['get_feedback', 'get_handoff_context', 'list_feedback', 'list_projects'].includes(tool.name)).every(tool => tool.annotations?.readOnlyHint && !tool.annotations?.destructiveHint)).toBe(true)
     const projects = (await call(client, 'list_projects', { limit: 1 })).structuredContent as Record<string, unknown>
     expect(projects.nextCursor).toBeTypeOf('string')

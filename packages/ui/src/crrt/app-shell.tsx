@@ -17,7 +17,8 @@ export type NavItem = {
 };
 
 type AppShellProps = {
-  workspace?: string;
+  /** Named next to the CRRT mark, in place of "CRRT". */
+  workspace?: string | null;
   /** Makes the CRRT mark a link, e.g. back to the marketing site. */
   homeHref?: string;
   /** Accessible name for that link. */
@@ -112,23 +113,22 @@ export function AppShell({
         aria-label="Workspace"
         className="flex w-full flex-col gap-5 border-b border-sidebar-border bg-sidebar px-3 py-4 md:max-h-dvh md:w-58 md:border-r md:border-b-0"
       >
-        <div className="flex items-center gap-2.5 px-1.5">
+        <div className="flex min-w-0 items-center gap-2.5 px-1.5">
           {homeHref ? (
             <a
               href={homeHref}
               aria-label={homeLabel}
-              className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <CarrotMark />
-              <span aria-hidden="true" className="font-semibold">CRRT</span>
+              <span aria-hidden="true" className="truncate font-semibold">{workspace || "CRRT"}</span>
             </a>
           ) : (
             <>
               <CarrotMark />
-              <span className="font-semibold">CRRT</span>
+              <span className="truncate font-semibold">{workspace || "CRRT"}</span>
             </>
           )}
-          {workspace && <span className="ml-auto truncate text-xs text-text-subtle">{workspace}</span>}
         </div>
         <NavList items={nav} activeId={activeId} />
         {projects && (

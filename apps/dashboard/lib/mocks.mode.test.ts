@@ -44,4 +44,17 @@ describe('dashboard mock modes', () => {
     expect(real.mocksEmpty).toBe(false)
     expect(real.mocksOnboarding).toBe(false)
   })
+
+  it('previews Brain rules, next steps and past runs with data, and no rules for an empty account', async () => {
+    const mocks = await loadMocks('1')
+    expect(mocks.getMockRules().map((rule) => rule.projectKey)).toEqual([null, 'proj_acme_marketing'])
+    const [step] = mocks.getMockNextSteps('proj_acme_marketing')
+    expect(step.status).toBe('paused')
+    // A step only shows while its comments are ready, so it must point at a ready mock comment.
+    expect(mocks.getMockComments('proj_acme_marketing').find((c) => c.id === step.comments[0].id)?.reviewStatus).toBe('accepted')
+    expect(mocks.getMockNextSteps('proj_dashboard_v2')).toEqual([])
+    expect(mocks.getMockAgentRuns('proj_acme_marketing').map((run) => run.outcome)).toEqual(['blocked', 'completed'])
+    expect(mocks.getMockAgentRuns('proj_dashboard_v2')).toEqual([])
+    expect((await loadMocks('empty')).getMockRules()).toEqual([])
+  })
 })

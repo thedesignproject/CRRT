@@ -1,5 +1,5 @@
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { route } from '../lib/routes'
 import { billingAvailabilityOnce } from '../lib/billing-availability'
 import type { User } from '@supabase/supabase-js'
@@ -16,14 +16,34 @@ interface UserMenuProps {
   documentsHref?: string
   /** Present only for super admins. */
   onOpenSuperAdmin?: () => void
+  /** Renames the workspace shown at the top of the sidebar. */
+  workspace?: { name: string | null; onRename: (name: string) => Promise<void> }
 }
 
 const itemClass = 'block w-full px-3 py-2 text-left text-xs text-foreground hover:bg-accent transition-colors'
+const inputClass = 'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
 
 /** Account menu: everything administrative, so the sidebar and top bar stay about the work. */
-export function UserMenu({ user, onSignOut, apiBase, accessToken, theme, toggleTheme, auditHref, documentsHref, onOpenSuperAdmin }: UserMenuProps) {
+export function UserMenu({ user, onSignOut, apiBase, accessToken, theme, toggleTheme, auditHref, documentsHref, onOpenSuperAdmin, workspace }: UserMenuProps) {
   const [shortcutsEnabled, setShortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const [open, setOpen] = useState(false)
+  // The draft name while renaming the workspace; null otherwise.
+  const [draft, setDraft] = useState<string | null>(null)
+  const [renameError, setRenameError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const saveName = async (event: FormEvent) => {
+    event.preventDefault()
+    setSaving(true)
+    setRenameError('')
+    try {
+      await workspace!.onRename(draft!.trim())
+      setDraft(null)
+    } catch (error) {
+      setRenameError((error as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
   const [billingEnabled, setBillingEnabled] = useState(false)
   useEffect(() => {
     let active = true
@@ -50,7 +70,7 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken, theme, toggleT
         type="button"
         aria-label="Account menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setDraft(null); setRenameError('') }}
         className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary hover:bg-primary/20 transition-colors"
         title={user.email ?? ''}
       >
@@ -62,6 +82,19 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken, theme, toggleT
             <div className="text-[11px] text-muted-foreground">Signed in as</div>
             <div className="text-xs font-medium text-foreground truncate">{user.email}</div>
           </div>
+          {workspace && (draft === null ? (
+            <button type="button" onClick={() => setDraft(workspace.name ?? '')} className={itemClass}>Rename workspace</button>
+          ) : (
+            <form onSubmit={(event) => { void saveName(event) }} className="flex flex-col gap-2 border-b border-border px-3 py-2">
+              <label htmlFor="workspace-name" className="text-[11px] text-muted-foreground">Workspace name</label>
+              <input id="workspace-name" autoFocus required maxLength={60} value={draft} onChange={(event) => setDraft(event.target.value)} className={inputClass} />
+              {renameError && <p role="alert" className="text-xs text-destructive">{renameError}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => { setDraft(null); setRenameError('') }} className="h-7 rounded-md px-2.5 text-xs font-medium text-text-body hover:bg-accent">Cancel</button>
+                <button type="submit" disabled={saving || !draft.trim()} className="h-7 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/80 disabled:opacity-50">Save</button>
+              </div>
+            </form>
+          ))}
           {auditHref && <a href={auditHref} className={itemClass}>Run audit</a>}
           {documentsHref && <a href={documentsHref} className={itemClass}>Documents</a>}
           <a href={route('/mcp-auth')} className={itemClass}>MCP connections</a>
