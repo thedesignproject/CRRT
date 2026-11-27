@@ -14,6 +14,8 @@ interface NextStepsPageProps {
   agentErrorCode: string | null
   agentConnected: boolean
   onUpgrade: () => void
+  /** Opens the agent session again after it failed. */
+  onRetry?: () => void
   onOpenComment: (id: string) => void
   onOpenRuns: () => void
   /** Direct delivery to a listening terminal. Without it, Send to Agent copies a prompt. */
@@ -21,7 +23,7 @@ interface NextStepsPageProps {
 }
 
 /** The project's comments sent to an agent, handed off in one prompt. */
-export function NextStepsPage({ projectName, comments, handoff, agentError, agentErrorCode, agentConnected, onUpgrade, onOpenComment, onOpenRuns, direct: delivery }: NextStepsPageProps) {
+export function NextStepsPage({ projectName, comments, handoff, agentError, agentErrorCode, agentConnected, onUpgrade, onRetry, onOpenComment, onOpenRuns, direct: delivery }: NextStepsPageProps) {
   const direct = delivery?.enabled ? delivery : undefined
   const count = comments.length
   const { sessionReady, ...cta } = handoff
@@ -50,7 +52,7 @@ export function NextStepsPage({ projectName, comments, handoff, agentError, agen
         )}
       </header>
       {agentError ? (
-        <AgentError message={agentError} code={agentErrorCode} onUpgrade={onUpgrade} />
+        <AgentError message={agentError} code={agentErrorCode} onUpgrade={onUpgrade} onRetry={onRetry} />
       ) : count === 0 ? (
         <EmptyState icon={<ListChecks />} title="No next steps yet">
           Use Send to Agent on comments in the Inbox and they show up here.
