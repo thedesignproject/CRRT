@@ -9,9 +9,19 @@ interface UserMenuProps {
   accessToken: string
   user: User
   onSignOut: () => void
+  theme?: 'light' | 'dark'
+  toggleTheme?: () => void
+  /** Project tools that left the top bar and sidebar. */
+  auditHref?: string
+  documentsHref?: string
+  /** Present only for super admins. */
+  onOpenSuperAdmin?: () => void
 }
 
-export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProps) {
+const itemClass = 'block w-full px-3 py-2 text-left text-xs text-foreground hover:bg-accent transition-colors'
+
+/** Account menu: everything administrative, so the sidebar and top bar stay about the work. */
+export function UserMenu({ user, onSignOut, apiBase, accessToken, theme, toggleTheme, auditHref, documentsHref, onOpenSuperAdmin }: UserMenuProps) {
   const [shortcutsEnabled, setShortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const [open, setOpen] = useState(false)
   const [billingEnabled, setBillingEnabled] = useState(false)
@@ -37,6 +47,9 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProp
   return (
     <div ref={ref} className="relative">
       <button
+        type="button"
+        aria-label="Account menu"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary hover:bg-primary/20 transition-colors"
         title={user.email ?? ''}
@@ -49,8 +62,15 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProp
             <div className="text-[11px] text-muted-foreground">Signed in as</div>
             <div className="text-xs font-medium text-foreground truncate">{user.email}</div>
           </div>
-          <a href={route('/mcp-auth')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">MCP connections</a>
-          {billingEnabled && <a href={route('/billing')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">Billing</a>}
+          {auditHref && <a href={auditHref} className={itemClass}>Run audit</a>}
+          {documentsHref && <a href={documentsHref} className={itemClass}>Documents</a>}
+          <a href={route('/mcp-auth')} className={itemClass}>MCP connections</a>
+          {billingEnabled && <a href={route('/billing')} className={itemClass}>Billing</a>}
+          {toggleTheme && (
+            <button type="button" onClick={() => { toggleTheme(); setOpen(false) }} className={itemClass}>
+              {theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            </button>
+          )}
           <button
             type="button"
             role="switch"
@@ -62,7 +82,11 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProp
           >
             <span>Keyboard shortcuts</span><span>{shortcutsEnabled ? 'On' : 'Off'}</span>
           </button>
+          {onOpenSuperAdmin && (
+            <button type="button" onClick={() => { onOpenSuperAdmin(); setOpen(false) }} className={itemClass}>Super admin</button>
+          )}
           <button
+            type="button"
             onClick={onSignOut}
             className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"
           >

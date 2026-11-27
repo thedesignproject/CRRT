@@ -26,7 +26,8 @@ import { useProjectGate } from './hooks/useProjectGate'
 import { DashboardShell } from './components/DashboardShell'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
-import { AgentSidebar } from './components/AgentSidebar'
+import { NextStepsPage } from './components/NextStepsPage'
+import { AgentRunsPage } from './components/AgentRunsPage'
 import { AgentLauncher } from './components/AgentLauncher'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
@@ -43,6 +44,7 @@ import { McpAuthPage } from './components/McpAuthPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 import { RecordingSharePage } from './components/RecordingSharePage'
 import { RecordingsPage } from './components/RecordingsPage'
+import { BrainPage } from './components/BrainPage'
 import { DocumentUnlockPage } from './documents/DocumentUnlockPage'
 import { documentRoute } from './documents/DocumentRoute'
 import { DocumentRecoveryProvider } from './documents/DocumentRecovery'
@@ -127,7 +129,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [refreshProjects])
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording'>(() => {
+  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording' | 'brain' | 'next-steps' | 'agent-runs'>(() => {
     if (relPath(window.location.pathname) === '/recording') return 'recording'
     const requested = new URLSearchParams(window.location.search).get('view')
     return requested === 'extension-comments' || requested === 'recordings' ? requested : 'feedback'
@@ -186,7 +188,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [refreshComments])
   const reviewRequests = useRef(new Map<string, symbol>())
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   // Bumped on every New project click so the page starts blank again.
@@ -217,27 +218,28 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const canOperateAgent = !mutation.blocked && activeProject
     ? activeProject.capabilities?.includes('agent:operate') ?? true
     : false
-  const canOpenAgentPanel = view === 'feedback' && Boolean(selectedProject) && activeProject !== null && canOperateAgent
-  const agentUnavailableReason = view !== 'feedback'
-    ? 'Open project feedback to use Agents.'
-    : !selectedProject || activeProject === null
-      ? 'Select a project to use Agents.'
-      : 'Agents are unavailable for your project role.'
+  const canOpenAgentPanel = Boolean(selectedProject) && activeProject !== null && canOperateAgent
+  const agentUnavailableReason = !selectedProject || activeProject === null
+    ? 'Select a project to use Agents.'
+    : 'Agents are unavailable for your project role.'
+  // Next steps and Agent runs belong to the selected project and need agent access.
+  const agentView = canOpenAgentPanel && (view === 'next-steps' || view === 'agent-runs') ? view : null
   const canManageProject = activeProject
     ? activeProject.capabilities?.includes('project:manage') ?? true
     : false
-  const readyAgentCommentIds = useMemo(
+  const readyAgentComments = useMemo(
     () => commentsProjectId === selectedProject
-      ? comments.filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared').map((comment) => comment.id)
+      ? comments.filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared')
       : [],
     [comments, commentsProjectId, selectedProject],
   )
+  const readyAgentCommentIds = useMemo(() => readyAgentComments.map((comment) => comment.id), [readyAgentComments])
   const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt, adoptSession } = useAgentSession(
     API_BASE,
     accessToken,
     canOpenAgentPanel && selectedProject ? selectedProject : null,
     readyAgentCommentIds,
-    sidebarOpen,
+    agentView !== null,
     user.id,
   )
   const activeAgentShare = agentShareState
@@ -275,10 +277,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [, setTick] = useState(0)
 
   useEffect(() => {
-    setSidebarOpen(false)
-  }, [selectedProject, view, canOperateAgent])
-
-  useEffect(() => {
     if (!pendingInvite) return
     let current = true
     apiAcceptInvite(API_BASE, accessToken, pendingInvite)
@@ -309,7 +307,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   useEffect(() => {
-    if (view !== 'extension-comments' && view !== 'recordings' && view !== 'recording' && !selectedProject && projects.length > 0) {
+    if (view !== 'extension-comments' && view !== 'recordings' && view !== 'recording' && view !== 'brain' && !selectedProject && projects.length > 0) {
       setSelectedProject(current => current || projects[0].publicKey)
     }
   }, [projects, selectedProject, view])
@@ -647,7 +645,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       await navigator.clipboard.writeText(result.prompt)
       if (generation !== bulkGeneration.current) return
       adoptSession({ shareId: share.shareId, slug: share.slug, token: share.token, docUrl: share.tokenUrl }, commentIds)
-      setSidebarOpen(true)
+      setView('agent-runs')
       setBulkTransitionNotice(`${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} copied for ${selectedAgentMeta.name}.`)
     } catch (error) {
       if (generation !== bulkGeneration.current) return
@@ -691,7 +689,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (view === 'extension-comments' || view === 'recordings') return
+      if (view === 'extension-comments' || view === 'recordings' || view === 'brain') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
       if (shortcutsEnabled && (e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -714,24 +712,28 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
 
-      if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
-      if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
-      if (e.key === ' ') { e.preventDefault(); goNext() }
+      // Comment shortcuts act on the selected comment, so only while the feedback list shows it.
+      if (view === 'feedback') {
+        if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
+        if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
+        if (e.key === ' ') { e.preventDefault(); goNext() }
 
-      if (selectedComment && canManageFeedback) {
-        if (e.key === 'a') toggleReview(selectedComment, 'accepted')
-        if (e.key === 'd') toggleReview(selectedComment, 'rejected')
-        if (e.key === 'm') handleToggleDone(selectedComment.id)
+        if (selectedComment && canManageFeedback) {
+          if (e.key === 'a') toggleReview(selectedComment, 'accepted')
+          if (e.key === 'd') toggleReview(selectedComment, 'rejected')
+          if (e.key === 'm') handleToggleDone(selectedComment.id)
+        }
       }
 
-      if (e.key === 's' && canOpenAgentPanel) setSidebarOpen((v) => !v)
+      if (e.key === 's' && canOpenAgentPanel && (view === 'feedback' || agentView !== null)) setView((v) => v === 'next-steps' ? 'feedback' : 'next-steps')
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
+  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, agentView, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
+    setView('feedback')
     setSelectedCommentId(commentId)
     setCmdOpen(false)
   }, [])
@@ -742,17 +744,22 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   const handleCmdAction = useCallback((action: string) => {
-    if (action === 'toggle-sidebar' && canOpenAgentPanel) setSidebarOpen((v) => !v)
+    if (action === 'toggle-sidebar' && canOpenAgentPanel) setView((v) => v === 'next-steps' ? 'feedback' : 'next-steps')
     if (action === 'filter-all') selectFilter('all')
     if (action === 'filter-open') selectFilter('open')
     if (action === 'filter-ready') selectFilter('ready')
     if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
     if (action === 'filter-done') selectFilter('done')
-    if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
-    if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
-    if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
+    // A filter or comment picked from another page is shown in the feedback list.
+    if (action.startsWith('filter-')) setView('feedback')
+    // Like A, D and M: act on the selected comment only while the feedback list shows it.
+    if (view === 'feedback' && selectedComment && canManageFeedback) {
+      if (action === 'accept') toggleReview(selectedComment, 'accepted')
+      if (action === 'reject') toggleReview(selectedComment, 'rejected')
+      if (action === 'done') handleToggleDone(selectedComment.id)
+    }
     setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
+  }, [view, selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return
@@ -790,8 +797,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
-  const openRecordings = useCallback(() => {
-    setView('recordings')
+  const openWorkspacePage = useCallback((page: 'recordings' | 'brain') => {
+    setView(page)
     setSelectedCommentId('')
     setPendingCommentSelection(null)
     setPendingBulkSelection(null)
@@ -845,6 +852,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [refreshComments])
 
   const checkFirstPin = useCallback(() => { void refreshComments() }, [refreshComments])
+  // Opens a comment from Next steps or Agent runs in the project's feedback list.
+  const openComment = useCallback((commentId: string) => {
+    setView('feedback')
+    setStatusFilter('all')
+    setSelectedCommentId(commentId)
+  }, [])
 
   // An account without projects lands on the New project page instead of an empty project.
   const noProjects = !projectsLoading && !projectsError && projects.length === 0
@@ -853,7 +866,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   return (
     <DashboardShell
         agentAction={canOpenAgentPanel
-          ? <AgentLauncher readyCount={readyAgentCommentIds.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />
+          ? <AgentLauncher readyCount={readyAgentCommentIds.length} open={agentView === 'next-steps'} onOpen={() => setView('next-steps')} />
           : <AgentLauncher readyCount={readyAgentCommentIds.length} open={false} disabled unavailableReason={agentUnavailableReason} />}
         projects={projects}
         projectsLoading={projectsLoading}
@@ -868,12 +881,21 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onNewProject={openNewProject}
         onLeaveNewProject={() => setAddProjectOpen(false)}
         onOpenCmd={() => setCmdOpen(true)}
-        onOpenSettings={() => { setConnectStorybook(false); setView((v) => (v === 'settings' ? 'feedback' : 'settings')) }}
+        onOpenSettings={() => { setConnectStorybook(false); setView('settings') }}
+        agentNav={canOpenAgentPanel ? {
+          readyCount: readyAgentCommentIds.length,
+          live: agentConnected,
+          active: agentView,
+          onOpenNextSteps: () => setView('next-steps'),
+          onOpenAgentRuns: () => setView('agent-runs'),
+        } : undefined}
         canManageProject={canManageProject}
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
         extensionCommentsActive={view === 'extension-comments'}
-        onOpenRecordings={openRecordings}
+        onOpenRecordings={() => openWorkspacePage('recordings')}
+        onOpenBrain={() => openWorkspacePage('brain')}
+        brainActive={view === 'brain'}
         recordingsActive={view === 'recordings' || view === 'recording'}
         apiBase={API_BASE}
         accessToken={accessToken}
@@ -885,7 +907,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onSignOut={onSignOut}
         superadmin={superadmin}
         superAdminActive={view === 'super-admin'}
-        onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
+        onOpenSuperAdmin={() => setView('super-admin')}
         footer={<StatusBar personal={view === 'extension-comments' || newProjectOpen} agentAvailable={canOpenAgentPanel} />}
       >
       <TrialOffer apiBase={API_BASE} accessToken={accessToken} userId={user.id} />
@@ -911,6 +933,35 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
       ) : view === 'recordings' ? (
         <RecordingsPage apiBase={API_BASE} accessToken={accessToken} />
+      ) : view === 'brain' ? (
+        <BrainPage />
+      ) : agentView === 'next-steps' ? (
+        <NextStepsPage
+          projectName={activeProject!.name}
+          comments={readyAgentComments}
+          handoff={{ sessionReady: agentSession !== null, selectedAgent, setSelectedAgent, selectedAgentMeta, agentDropdownOpen, setAgentDropdownOpen, copyStatus, onCopySessionLink: handleCopySessionLink }}
+          agentError={agentError}
+          agentErrorCode={agentErrorCode}
+          agentConnected={agentConnected}
+          onUpgrade={openAgentUpgrade}
+          onOpenComment={openComment}
+          onOpenRuns={() => setView('agent-runs')}
+        />
+      ) : agentView === 'agent-runs' ? (
+        <AgentRunsPage
+          projectName={activeProject!.name}
+          agentName={selectedAgentMeta.name}
+          connected={agentConnected}
+          queue={agentQueueComments}
+          events={agentEvents}
+          agentError={agentError}
+          agentErrorCode={agentErrorCode}
+          notice={bulkTransitionNotice}
+          selectedCommentId={selectedCommentId}
+          onUpgrade={openAgentUpgrade}
+          onOpenComment={openComment}
+          onOpenNextSteps={() => setView('next-steps')}
+        />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (
@@ -974,30 +1025,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           accessToken={accessToken}
         />
 
-        {sidebarOpen && canOpenAgentPanel && (
-          <AgentSidebar
-            selectedProject={selectedProject}
-            projectComments={agentQueueComments}
-            readyCount={readyAgentCommentIds.length}
-            filtered={statusFilter === 'ready'}
-            selectedCommentId={selectedCommentId}
-            onSelectComment={setSelectedCommentId}
-            agentSession={agentSession}
-            agentEvents={agentEvents}
-            agentError={agentError}
-            agentErrorCode={agentErrorCode}
-            agentConnected={agentConnected}
-            selectedAgent={selectedAgent}
-            setSelectedAgent={setSelectedAgent}
-            selectedAgentMeta={selectedAgentMeta}
-            agentDropdownOpen={agentDropdownOpen}
-            setAgentDropdownOpen={setAgentDropdownOpen}
-            copyStatus={copyStatus}
-            onCopySessionLink={handleCopySessionLink}
-            onUpgrade={openAgentUpgrade}
-            onClose={() => setSidebarOpen(false)}
-          />
-        )}
 
         {bulkMode && canManageFeedback && (
           <BulkActionBar selectedCount={bulkSelectedIds.size} busy={bulkActionBusy} onClose={exitBulkMode}>

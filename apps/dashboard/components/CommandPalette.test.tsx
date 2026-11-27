@@ -21,6 +21,6 @@ describe('<CommandPalette /> permissions', () => {
     expect(screen.queryByText('Toggle Send to Agent')).toBeNull()
     expect(screen.queryByText('Toggle Done')).toBeNull()
     expect(screen.queryByText('Toggle Reject')).toBeNull()
-    expect(screen.queryByText('Toggle agent panel')).toBeNull()
+    expect(screen.queryByText('Open Next steps')).toBeNull()
   })
 })
