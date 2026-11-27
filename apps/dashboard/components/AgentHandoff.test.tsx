@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { Comment, ImplStatus } from '../lib/types'
+import { AGENTS, agentActionLabel, type Comment, type ImplStatus } from '../lib/types'
 import { AgentError, FirstTimeHint, HandoffCTA, LiveQueue, WaitingForAgent } from './AgentHandoff'
 
 function comment(id: string, implementationStatus: ImplStatus): Comment {
@@ -28,6 +28,7 @@ function comment(id: string, implementationStatus: ImplStatus): Comment {
 }
 
 const codex = { id: 'codex', name: 'Codex', hint: 'Paste prompt in prompt', target: 'codex' as const }
+const prompt = AGENTS[0]
 
 describe('agent handoff pieces', () => {
   it('places ready-for-testing work between the agent queue and Done', () => {
@@ -71,6 +72,19 @@ describe('agent handoff pieces', () => {
     expect(screen.queryByText('Waiting for Codex…')).toBeNull()
     view.rerender(<WaitingForAgent agentName="Codex" active />)
     expect(screen.getByText('Waiting for Codex…')).toBeInTheDocument()
+  })
+
+  it('offers a plain prompt first, labelled for any agent', () => {
+    const props = { selectedAgent: 'prompt', setSelectedAgent: vi.fn(), selectedAgentMeta: prompt, agentDropdownOpen: false, setAgentDropdownOpen: vi.fn(), copyStatus: 'idle' as const, onCopySessionLink: vi.fn(), disabled: false, count: 2 }
+    const view = render(<HandoffCTA {...props} />)
+    expect(screen.getByRole('button', { name: 'Copy 2 crrts as prompt' })).toBeInTheDocument()
+    view.rerender(<HandoffCTA {...props} count={1} />)
+    expect(screen.getByRole('button', { name: 'Copy 1 crrt as prompt' })).toBeInTheDocument()
+    view.rerender(<HandoffCTA {...props} copyStatus="copied" />)
+    expect(screen.getByText('Paste into your agent')).toBeInTheDocument()
+    expect(agentActionLabel(prompt)).toBe('Copy as prompt')
+    expect(agentActionLabel(codex)).toBe('Send to Codex')
+    expect(AGENTS.map((agent) => agent.name)).toContain('Conductor')
   })
 
   it('copies the handoff prompt and switches agents', () => {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { cn } from '../lib/utils'
 import type { ShareEventsResponse } from '../api'
 import { describeEvent } from '../lib/format'
-import { AGENTS, type AgentMeta, type Comment } from '../lib/types'
+import { AGENTS, PROMPT_AGENT_ID, type AgentMeta, type Comment } from '../lib/types'
 import { BotIcon, CheckIcon, ChevronDownIcon, CopyIcon, SpinnerIcon, XIcon } from './icons'
 
 /** Agent handoff pieces shared by the Next steps and Agent runs pages. */
@@ -71,10 +71,12 @@ export function HandoffCTA({
     copyStatus === 'copying'
       ? 'Copying…'
       : copyStatus === 'copied'
-        ? `Paste into ${selectedAgentMeta.name}`
+        ? `Paste into ${selectedAgentMeta.id === PROMPT_AGENT_ID ? 'your agent' : selectedAgentMeta.name}`
         : copyStatus === 'error'
           ? 'Copy failed — try again'
-          : `Send ${count} ${count === 1 ? 'crrt' : 'crrts'} to ${selectedAgentMeta.name}`
+          : selectedAgentMeta.id === PROMPT_AGENT_ID
+            ? `Copy ${count} ${count === 1 ? 'crrt' : 'crrts'} as prompt`
+            : `Send ${count} ${count === 1 ? 'crrt' : 'crrts'} to ${selectedAgentMeta.name}`
 
   const Icon =
     copyStatus === 'copying'
